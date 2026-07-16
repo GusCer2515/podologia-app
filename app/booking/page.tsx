@@ -139,9 +139,19 @@ export default function BookingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6 mt-10">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Agendar Cita</h1>
+    <div className="min-h-screen bg-crema p-4">
+      <div className="max-w-md mx-auto pt-6 pb-2">
+        <a href="/" className="text-sm text-tinta-suave hover:text-tinta transition">
+          ← Volver al inicio
+        </a>
+      </div>
+      <div className="max-w-md mx-auto bg-marfil rounded-3xl shadow-lg shadow-tinta/10 border border-arena p-7 mt-2">
+        <p className="text-xs tracking-[0.25em] uppercase text-rosa font-bold mb-2">
+          Vida de Colores
+        </p>
+        <h1 className="font-display text-4xl text-tinta font-medium mb-6">
+          Agendar <span className="italic">tu hora</span>
+        </h1>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
@@ -151,7 +161,7 @@ export default function BookingPage() {
             value={formData.name}
             onChange={handleChange}
             required
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-4 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave"
           />
 
           <input
@@ -161,7 +171,7 @@ export default function BookingPage() {
             value={formData.email}
             onChange={handleChange}
             required
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-4 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave"
           />
 
           <input
@@ -171,7 +181,7 @@ export default function BookingPage() {
             value={formData.phone}
             onChange={handleChange}
             required
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-4 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave"
           />
 
           <input
@@ -180,7 +190,7 @@ export default function BookingPage() {
             placeholder="RUT (ej: 12345678-9)"
             value={formData.rut}
             onChange={handleChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-4 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave"
           />
 
           <div>
@@ -194,7 +204,7 @@ export default function BookingPage() {
               onChange={handleDateChange}
               min={todayStr}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave"
             />
           </div>
 
@@ -218,8 +228,8 @@ export default function BookingPage() {
                       onClick={() => setFormData(prev => ({ ...prev, time }))}
                       className={`px-2 py-2 rounded-lg text-sm font-semibold border transition ${
                         formData.time === time
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400 hover:bg-indigo-50'
+                          ? 'bg-tinta text-marfil border-tinta'
+                          : 'bg-white text-foreground border-arena hover:border-tinta-suave hover:bg-rosa-palo/40'
                       }`}
                     >
                       {time}
@@ -235,14 +245,14 @@ export default function BookingPage() {
             placeholder="Notas (opcional)"
             value={formData.notes}
             onChange={handleChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-4 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave"
             rows={3}
           />
 
           <button
             type="submit"
             disabled={loading || !formData.time}
-            className="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50"
+            className="w-full bg-rosa text-marfil py-3 rounded-full font-bold hover:opacity-90 transition shadow-lg shadow-rosa/25 disabled:opacity-50 disabled:shadow-none"
           >
             {loading ? 'Agendando...' : formData.time ? `Agendar Cita a las ${formData.time}` : 'Selecciona fecha y hora'}
           </button>

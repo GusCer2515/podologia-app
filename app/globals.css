@@ -1,26 +1,59 @@
 @import "tailwindcss";
 
+/* ============================================================
+   Paleta "Vida de Colores" — botánica, cálida, artesanal
+   Azul tinta del logo + crema + rosa empolvado + salvia
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #faf6f0;
+  --foreground: #43414a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-crema: #faf6f0;
+  --color-marfil: #fffdf9;
+  --color-arena: #f1e9de;
+  --color-tinta: #33506e;
+  --color-tinta-suave: #5b7794;
+  --color-rosa: #c96f85;
+  --color-rosa-palo: #f3dee2;
+  --color-salvia: #7d8f6f;
+
+  --font-sans: var(--font-karla);
+  --font-display: var(--font-cormorant);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-karla), Georgia, sans-serif;
+}
+
+/* Animación de entrada suave (hero) */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.7s ease-out both;
+}
+
+.fade-delay-1 {
+  animation-delay: 0.12s;
+}
+.fade-delay-2 {
+  animation-delay: 0.24s;
+}
+.fade-delay-3 {
+  animation-delay: 0.36s;
 }
