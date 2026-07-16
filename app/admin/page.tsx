@@ -3,30 +3,47 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { supabase, signIn, signOut, getSession } from '@/lib/supabase'
 
 export default function AdminPage() {
-  const router = useRouter()
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [loggingIn, setLoggingIn] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [checkingSession, setCheckingSession] = useState(true)
 
-  // Verificar autenticación (contraseña simple)
-  const handleLogin = () => {
-    // Cambiar "admin123" por tu contraseña
-    if (password === 'admin123') {
+  // Al cargar, verificar si ya hay sesión activa
+  useEffect(() => {
+    getSession().then((session) => {
+      setIsAuthenticated(!!session)
+      setCheckingSession(false)
+    })
+  }, [])
+
+  // Login con Supabase Auth (seguro, sin contraseñas en el código)
+  const handleLogin = async () => {
+    if (!email || !password) {
+      alert('Ingresa email y contraseña')
+      return
+    }
+    setLoggingIn(true)
+    try {
+      await signIn(email, password)
       setIsAuthenticated(true)
+      setEmail('')
       setPassword('')
-    } else {
-      alert('Contraseña incorrecta')
+    } catch {
+      alert('Email o contraseña incorrectos')
+    } finally {
+      setLoggingIn(false)
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut()
     setIsAuthenticated(false)
-    setPassword('')
   }
 
   // Cargar citas
@@ -53,6 +70,15 @@ export default function AdminPage() {
     }
   }
 
+  // Verificando sesión al cargar
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center">
+        <p className="text-gray-600">Cargando...</p>
+      </div>
+    )
+  }
+
   // Si no está autenticado, mostrar login
   if (!isAuthenticated) {
     return (
@@ -64,21 +90,30 @@ export default function AdminPage() {
           <p className="text-gray-600 text-center mb-6">
             Acceso restringido solo para administrador
           </p>
-          
+
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Contraseña"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
           />
-          
+
           <button
             onClick={handleLogin}
-            className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition"
+            disabled={loggingIn}
+            className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition disabled:opacity-50"
           >
-            Ingresar
+            {loggingIn ? 'Ingresando...' : 'Ingresar'}
           </button>
         </div>
       </div>

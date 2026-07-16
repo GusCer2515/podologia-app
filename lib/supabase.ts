@@ -5,24 +5,61 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
-export async function createPatient(data: any) {
-  const { data: patient, error } = await supabase
-    .from('patients')
-    .insert([data])
-    .select()
+// ============================================================
+// AUTENTICACIÓN (Supabase Auth — para el panel admin)
+// ============================================================
 
+export async function signIn(email: string, password: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
   if (error) throw error
-  return patient
+  return data
 }
 
-export async function createAppointment(data: any) {
-  const { data: appointment, error } = await supabase
-    .from('appointments')
-    .insert([data])
-    .select()
-
+export async function signOut() {
+  const { error } = await supabase.auth.signOut()
   if (error) throw error
-  return appointment
+}
+
+export async function getSession() {
+  const { data } = await supabase.auth.getSession()
+  return data.session
+}
+
+// ============================================================
+// AGENDAMIENTO PÚBLICO (vía RPC seguro — única puerta de entrada)
+// ============================================================
+
+export interface BookingData {
+  name: string
+  email: string
+  phone: string
+  rut: string
+  datetime: string // formato: "2026-07-20T10:00:00"
+  notes?: string
+}
+
+export async function bookAppointment(booking: BookingData) {
+  const { data, error } = await supabase.rpc('book_appointment', {
+    p_name: booking.name,
+    p_email: booking.email,
+    p_phone: booking.phone,
+    p_rut: booking.rut,
+    p_datetime: booking.datetime,
+    p_notes: booking.notes ?? null,
+  })
+  if (error) throw error
+  return data as { success: boolean; error?: string; appointment_id?: string }
+}
+
+export async function getOccupiedSlots(date: string) {
+  const { data, error } = await supabase.rpc('get_occupied_slots', {
+    p_date: date,
+  })
+  if (error) throw error
+  return (data ?? []) as { slot: string }[]
 }
 
 export async function getAvailability() {
@@ -35,10 +72,24 @@ export async function getAvailability() {
   return data
 }
 
+export async function getBlockouts() {
+  const { data, error } = await supabase
+    .from('blockouts')
+    .select('*')
+
+  if (error) throw error
+  return data
+}
+
+// ============================================================
+// FUNCIONES ADMIN (requieren sesión autenticada — RLS las protege)
+// ============================================================
+
 export async function getAppointments() {
   const { data, error } = await supabase
     .from('appointments')
-    .select('*')
+    .select('*, patients(name, email, phone, insurance)')
+    .order('appointment_date', { ascending: true })
 
   if (error) throw error
   return data
@@ -48,6 +99,7 @@ export async function getPatients() {
   const { data, error } = await supabase
     .from('patients')
     .select('*')
+    .order('name', { ascending: true })
 
   if (error) throw error
   return data

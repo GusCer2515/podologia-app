@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createPatient, createAppointment } from '@/lib/supabase'
+import { bookAppointment } from '@/lib/supabase'
 
 export default function BookingPage() {
   const [loading, setLoading] = useState(false)
@@ -25,28 +25,24 @@ export default function BookingPage() {
     setLoading(true)
     
     try {
-      // Crear paciente
-      const patientData = {
+      // Agendar vía RPC seguro (valida disponibilidad en la BD)
+      const result = await bookAppointment({
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
-        rut: formData.rut
-      }
-      const [patient] = await createPatient(patientData)
-      
-      // Crear cita
-      const appointmentData = {
-        patient_id: patient.id,
-        appointment_date: `${formData.date}T${formData.time}`,
-        duration_minutes: 30,
+        rut: formData.rut,
+        datetime: `${formData.date}T${formData.time}:00`,
         notes: formData.notes
+      })
+
+      if (result.success) {
+        alert('✅ Cita agendada correctamente')
+        setFormData({ name: '', email: '', phone: '', date: '', time: '', rut: '', notes: '' })
+      } else {
+        alert(`⚠️ ${result.error}`)
       }
-      await createAppointment(appointmentData)
-      
-      alert('✅ Cita agendada correctamente')
-      setFormData({ name: '', email: '', phone: '', date: '', time: '', rut: '', notes: '' })
     } catch (error) {
-      alert('❌ Error al agendar cita')
+      alert('❌ Error al agendar cita. Intenta nuevamente.')
       console.error(error)
     } finally {
       setLoading(false)
