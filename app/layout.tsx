@@ -15,9 +15,19 @@ const karla = Karla({
 });
 
 export const metadata: Metadata = {
-  title: "Vida de Colores — Podología Clínica y Nails Artist",
+  metadataBase: new URL("https://www.vidadecolorespodologia.cl"),
+  title: "Vida de Colores — Podología Clínica",
   description:
     "Cuidado podológico profesional con atención personalizada. Agenda tu hora online. Podóloga clínica Jahel Rivera Soto.",
+  openGraph: {
+    title: "Vida de Colores — Podología Clínica",
+    description:
+      "Cuidado podológico profesional. Agenda tu hora online en segundos. 🌸",
+    url: "https://www.vidadecolorespodologia.cl",
+    siteName: "Vida de Colores",
+    locale: "es_CL",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
