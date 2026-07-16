@@ -37,7 +37,7 @@ export default function BookingPage() {
       // Crear cita
       const appointmentData = {
         patient_id: patient.id,
-        appointment_date: \\T\\,
+        appointment_date: `${formData.date}T${formData.time}`,
         duration_minutes: 30,
         notes: formData.notes
       }
