@@ -128,6 +128,20 @@ export default function BookingPage() {
       })
 
       if (result.success) {
+        // Enviar correos de confirmación automáticamente (paciente + clínica)
+        fetch('/api/notify-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appointmentId: result.appointment_id,
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            date: formData.date,
+            time: formData.time,
+          }),
+        }).catch(() => {}) // si falla el correo, la reserva igual queda hecha
+
         setModal({ type: 'success', date: formData.date, time: formData.time, name: formData.name })
         setFormData({ name: '', email: '', phone: '', rut: '', date: '', time: '', notes: '' })
         setSlots([])
@@ -298,13 +312,16 @@ export default function BookingPage() {
                   Te esperamos el <strong className="text-tinta">{fmtFecha(modal.date)}</strong>
                   <br />a las <strong className="text-tinta">{modal.time} hrs</strong>.
                 </p>
+                <p className="mt-3 text-xs text-foreground/60 bg-arena/50 rounded-xl px-4 py-2">
+                  📧 Te enviamos la confirmación a tu correo.
+                </p>
                 <a
                   href={waRespaldo(modal)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-6 block w-full bg-salvia text-marfil py-3 rounded-full font-bold hover:opacity-90 transition"
+                  className="mt-4 block w-full bg-salvia text-marfil py-3 rounded-full font-bold hover:opacity-90 transition"
                 >
-                  💬 Enviar respaldo por WhatsApp
+                  💬 Confirmar también por WhatsApp
                 </a>
                 <button
                   onClick={() => setModal(null)}
