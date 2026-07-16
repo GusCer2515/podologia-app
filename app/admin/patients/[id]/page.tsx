@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { getPatient, updatePatient, getPatientAppointments } from '@/lib/supabase'
 import ClinicalRecordForm from '@/components/ClinicalRecordForm'
 import AttentionsTab from '@/components/AttentionsTab'
+import DocumentsTab from '@/components/DocumentsTab'
 
 const TABS = [
   { key: 'info', label: '📋 Información' },
@@ -223,16 +224,8 @@ export default function PatientDetailPage() {
       {/* Tab: Atenciones */}
       {tab === 'atenciones' && <AttentionsTab patientId={patientId} />}
 
-      {/* Tab: Documentos (Fase 4) */}
-      {tab === 'documentos' && (
-        <div className="bg-white rounded-lg shadow p-8 text-center max-w-2xl">
-          <p className="text-4xl mb-3">🚧</p>
-          <p className="text-gray-600 font-semibold">Esta sección viene en la próxima fase</p>
-          <p className="text-sm text-gray-400 mt-1">
-            Recetas e indicaciones en PDF + envío por WhatsApp (Fase 4)
-          </p>
-        </div>
-      )}
+      {/* Tab: Documentos */}
+      {tab === 'documentos' && <DocumentsTab patient={patient} />}
     </div>
   )
 }

@@ -188,6 +188,51 @@ export async function createAttention(payload: any) {
   return data
 }
 
+// ============================================================
+// DOCUMENTOS (recetas e indicaciones en PDF)
+// ============================================================
+
+export async function getDocuments(patientId: string) {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data
+}
+
+export async function createDocument(payload: any) {
+  const { data, error } = await supabase
+    .from('documents')
+    .insert([payload])
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// Sube el PDF al bucket privado "documents"
+export async function uploadDocumentPdf(path: string, blob: Blob) {
+  const { error } = await supabase.storage
+    .from('documents')
+    .upload(path, blob, { contentType: 'application/pdf', upsert: true })
+
+  if (error) throw error
+}
+
+// Genera un link firmado temporal (30 días) para compartir el PDF
+export async function getDocumentSignedUrl(path: string) {
+  const { data, error } = await supabase.storage
+    .from('documents')
+    .createSignedUrl(path, 60 * 60 * 24 * 30)
+
+  if (error) throw error
+  return data.signedUrl
+}
+
 export async function getAppointmentsBetween(startIso: string, endIso: string) {
   const { data, error } = await supabase
     .from('appointments')
