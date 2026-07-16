@@ -1,12 +1,14 @@
 // Generador de PDFs para recetas e indicaciones
 // Se importa dinámicamente (solo en el navegador, al hacer click)
 
-import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer'
+import { Document, Page, Text, View, StyleSheet, Image, pdf } from '@react-pdf/renderer'
 import { CLINIC } from './clinicConfig'
 
 const styles = StyleSheet.create({
   page: {
-    padding: 50,
+    paddingTop: 40,
+    paddingBottom: 30,
+    paddingHorizontal: 50,
     fontSize: 11,
     fontFamily: 'Helvetica',
     color: '#333333',
@@ -14,19 +16,10 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     height: '100%',
   },
-  brand: {
-    fontSize: 30,
-    fontFamily: 'Times-Italic',
-    color: '#4a6da7',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  brandUnderline: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#e8b4c8',
-    width: 180,
+  logo: {
+    width: 260,
     alignSelf: 'center',
-    marginBottom: 24,
+    marginBottom: 14,
   },
   subtitle: {
     fontSize: 12,
@@ -52,6 +45,20 @@ const styles = StyleSheet.create({
   spacer: {
     flexGrow: 1,
   },
+  footerBanner: {
+    position: 'relative',
+  },
+  footerFlowers: {
+    width: '100%',
+  },
+  footerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
   footerName: {
     fontSize: 12,
     fontFamily: 'Helvetica-Bold',
@@ -61,12 +68,12 @@ const styles = StyleSheet.create({
   footerRut: {
     fontSize: 11,
     textAlign: 'center',
-    marginBottom: 14,
   },
   footerContact: {
     fontSize: 9,
     color: '#999999',
     textAlign: 'center',
+    marginTop: 8,
   },
 })
 
@@ -89,16 +96,15 @@ function Field({ label, value }: { label: string; value?: string }) {
   )
 }
 
-function ClinicDocument({ data }: { data: PdfDocumentData }) {
+function ClinicDocument({ data, origin }: { data: PdfDocumentData; origin: string }) {
   return (
     <Document
       title={data.tipo === 'receta' ? 'Receta' : 'Indicaciones'}
       author={CLINIC.professional}
     >
       <Page size="LETTER" style={styles.page}>
-        {/* Encabezado */}
-        <Text style={styles.brand}>{CLINIC.brand}</Text>
-        <View style={styles.brandUnderline} />
+        {/* Logo Vida de Colores */}
+        <Image style={styles.logo} src={`${origin}/pdf-assets/logo.png`} />
         <Text style={styles.subtitle}>{CLINIC.subtitle}</Text>
 
         {/* Campos según tipo de documento */}
@@ -123,9 +129,15 @@ function ClinicDocument({ data }: { data: PdfDocumentData }) {
 
         <View style={styles.spacer} />
 
-        {/* Pie de página */}
-        <Text style={styles.footerName}>{CLINIC.professional}</Text>
-        <Text style={styles.footerRut}>Rut: {CLINIC.rut}</Text>
+        {/* Pie: flores en las esquinas + nombre/rut centrado encima */}
+        <View style={styles.footerBanner}>
+          <Image style={styles.footerFlowers} src={`${origin}/pdf-assets/flores-pie.png`} />
+          <View style={styles.footerOverlay}>
+            <Text style={styles.footerName}>{CLINIC.professional}</Text>
+            <Text style={styles.footerRut}>Rut: {CLINIC.rut}</Text>
+          </View>
+        </View>
+
         <Text style={styles.footerContact}>
           {CLINIC.instagram}  {CLINIC.phone}  {CLINIC.email}
         </Text>
@@ -135,5 +147,7 @@ function ClinicDocument({ data }: { data: PdfDocumentData }) {
 }
 
 export async function generateDocumentPdf(data: PdfDocumentData): Promise<Blob> {
-  return await pdf(<ClinicDocument data={data} />).toBlob()
+  // origin = URL del sitio (funciona en localhost y en producción)
+  const origin = window.location.origin
+  return await pdf(<ClinicDocument data={data} origin={origin} />).toBlob()
 }

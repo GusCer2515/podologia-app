@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Archivos de Excel del negocio (pueden contener datos de pacientes - NO SUBIR)
+*.xlsm
+*.xlsx
+*.xls
