@@ -104,3 +104,55 @@ export async function getPatients() {
   if (error) throw error
   return data
 }
+
+export async function getPatient(id: string) {
+  const { data, error } = await supabase
+    .from('patients')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function updatePatient(id: string, fields: any) {
+  const { error } = await supabase
+    .from('patients')
+    .update(fields)
+    .eq('id', id)
+
+  if (error) throw error
+}
+
+export async function getPatientAppointments(patientId: string) {
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('appointment_date', { ascending: false })
+
+  if (error) throw error
+  return data
+}
+
+export async function getAppointmentsBetween(startIso: string, endIso: string) {
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('*, patients(id, name, phone)')
+    .gte('appointment_date', startIso)
+    .lt('appointment_date', endIso)
+    .order('appointment_date', { ascending: true })
+
+  if (error) throw error
+  return data
+}
+
+export async function updateAppointmentStatus(id: string, status: string) {
+  const { error } = await supabase
+    .from('appointments')
+    .update({ status })
+    .eq('id', id)
+
+  if (error) throw error
+}
