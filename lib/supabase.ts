@@ -234,6 +234,93 @@ export async function deleteConvenio(id: string) {
 }
 
 // ============================================================
+// CONTENIDO DEL SITIO: carrusel de casos y noticias
+// ============================================================
+
+// Sube imagen al bucket público y devuelve su URL
+export async function uploadPublicImage(folder: string, file: File): Promise<string> {
+  const safeName = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-')
+  const path = `${folder}/${Date.now()}_${safeName}`
+  const { error } = await supabase.storage.from('public-images').upload(path, file)
+  if (error) throw error
+  const { data } = supabase.storage.from('public-images').getPublicUrl(path)
+  return data.publicUrl
+}
+
+export async function getCarouselCases() {
+  const { data, error } = await supabase
+    .from('carousel_cases')
+    .select('*')
+    .eq('is_active', true)
+    .order('orden', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function getAllCarouselCases() {
+  const { data, error } = await supabase
+    .from('carousel_cases')
+    .select('*')
+    .order('orden', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function addCarouselCase(payload: any) {
+  const { error } = await supabase.from('carousel_cases').insert([payload])
+  if (error) throw error
+}
+
+export async function updateCarouselCase(id: string, fields: any) {
+  const { error } = await supabase.from('carousel_cases').update(fields).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteCarouselCase(id: string) {
+  const { error } = await supabase.from('carousel_cases').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function getPublishedPosts(limit?: number) {
+  let query = supabase
+    .from('posts')
+    .select('*')
+    .eq('publicado', true)
+    .order('created_at', { ascending: false })
+  if (limit) query = query.limit(limit)
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+export async function getAllPosts() {
+  const { data, error } = await supabase
+    .from('posts')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createPost(payload: any) {
+  const { error } = await supabase.from('posts').insert([payload])
+  if (error) throw error
+}
+
+export async function updatePost(id: string, fields: any) {
+  const { error } = await supabase
+    .from('posts')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deletePost(id: string) {
+  const { error } = await supabase.from('posts').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ============================================================
 // FICHA CLÍNICA
 // ============================================================
 

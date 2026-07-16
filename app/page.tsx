@@ -69,6 +69,7 @@ export default function Home() {
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-tinta-suave">
             <a href="#servicios" className="hover:text-tinta transition">Servicios</a>
             <a href="#como-funciona" className="hover:text-tinta transition">Cómo funciona</a>
+            <Link href="/blog" className="hover:text-tinta transition">Consejos</Link>
             <a href="#contacto" className="hover:text-tinta transition">Contacto</a>
           </nav>
 

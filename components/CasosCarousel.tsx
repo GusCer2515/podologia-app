@@ -1,64 +1,30 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
+import { getCarouselCases } from '@/lib/supabase'
 
-// ============================================================
-// CASOS REALES — para agregar un caso:
-// 1. Deja la foto en public/images/casos/ (jpg o png)
-// 2. Agrega una línea aquí con la ruta y su descripción
-// ============================================================
-const CASOS: { src: string; title: string; desc: string }[] = [
-  {
-    src: '/images/casos/Caso1.jpeg',
-    title: 'Onicomicosis',
-    desc: 'Tratamiento antimicótico y resecado de hiperqueratosis',
-  },
-  {
-    src: '/images/casos/Caso2.jpeg',
-    title: 'Tratamiento antimicótico',
-    desc: 'Aplicación localizada en uña afectada por hongos',
-  },
-  {
-    src: '/images/casos/Caso3.jpeg',
-    title: 'Heloma plantar',
-    desc: 'Resecado de queratoma en la planta del pie',
-  },
-  {
-    src: '/images/casos/Caso4.jpeg',
-    title: 'Hiperqueratosis plantar',
-    desc: 'Evaluación y tratamiento integral de la planta del pie',
-  },
-  {
-    src: '/images/casos/Caso5.jpeg',
-    title: 'Rehabilitación ungueal',
-    desc: 'Recuperación de uñas dañadas con seguimiento clínico',
-  },
-  {
-    src: '/images/casos/Caso6.jpeg',
-    title: 'Grietas del talón',
-    desc: 'Tratamiento de hiperqueratosis y grietas del talón',
-  },
-  {
-    src: '/images/casos/Caso7.jpeg',
-    title: 'Uña encarnada',
-    desc: 'Tratamiento de onicocriptosis y alivio del dolor',
-  },
-]
-
+// Carrusel de casos reales — el contenido se administra desde
+// el panel admin (🖼 Contenido), sin tocar código
 const INTERVALO_MS = 4500
 
 export default function CasosCarousel() {
+  const [casos, setCasos] = useState<any[]>([])
   const [index, setIndex] = useState(0)
 
   useEffect(() => {
-    if (CASOS.length < 2) return
-    const timer = setInterval(() => setIndex((i) => (i + 1) % CASOS.length), INTERVALO_MS)
-    return () => clearInterval(timer)
+    getCarouselCases()
+      .then((data) => setCasos(data || []))
+      .catch(console.error)
   }, [])
 
-  // Si aún no hay fotos cargadas, la sección no se muestra
-  if (CASOS.length === 0) return null
+  useEffect(() => {
+    if (casos.length < 2) return
+    const timer = setInterval(() => setIndex((i) => (i + 1) % casos.length), INTERVALO_MS)
+    return () => clearInterval(timer)
+  }, [casos.length])
+
+  // Sin casos activos, la sección no se muestra
+  if (casos.length === 0) return null
 
   return (
     <section id="casos" className="bg-tinta">
@@ -71,42 +37,38 @@ export default function CasosCarousel() {
         </h2>
 
         {/* Carrusel con fundido cruzado */}
-        <div className="relative max-w-3xl mx-auto mt-12 aspect-[16/10] rounded-[2.5rem] overflow-hidden shadow-2xl">
-          {CASOS.map((caso, i) => (
+        <div className="relative max-w-3xl mx-auto mt-12 aspect-[16/10] rounded-[2.5rem] overflow-hidden shadow-2xl bg-tinta-suave/30">
+          {casos.map((caso, i) => (
             <div
-              key={caso.src}
+              key={caso.id}
               className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
                 i === index ? 'opacity-100' : 'opacity-0'
               }`}
             >
               {/* Fondo: la misma foto difuminada (rellena el espacio) */}
-              <Image
-                src={caso.src}
+              <img
+                src={caso.image_url}
                 alt=""
-                fill
                 aria-hidden
-                className="object-cover blur-2xl scale-110 opacity-60"
-                sizes="(max-width: 768px) 100vw, 768px"
+                className="absolute inset-0 w-full h-full object-cover blur-2xl scale-110 opacity-60"
               />
               {/* Foto completa al centro, sin recortes */}
-              <Image
-                src={caso.src}
-                alt={caso.title}
-                fill
-                className="object-contain"
-                sizes="(max-width: 768px) 100vw, 768px"
+              <img
+                src={caso.image_url}
+                alt={caso.titulo}
+                className="absolute inset-0 w-full h-full object-contain"
               />
               {/* Leyenda sobre degradado */}
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-tinta/90 to-transparent pt-16 pb-6 px-8">
-                <p className="font-display text-2xl text-marfil font-semibold">{caso.title}</p>
-                <p className="text-sm text-marfil/80">{caso.desc}</p>
+                <p className="font-display text-2xl text-marfil font-semibold">{caso.titulo}</p>
+                <p className="text-sm text-marfil/80">{caso.descripcion}</p>
               </div>
             </div>
           ))}
 
           {/* Indicadores */}
           <div className="absolute bottom-4 right-6 flex gap-2">
-            {CASOS.map((_, i) => (
+            {casos.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setIndex(i)}

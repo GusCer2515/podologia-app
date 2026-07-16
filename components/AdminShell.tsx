@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/admin', label: '📅 Agenda' },
   { href: '/admin/patients', label: '👥 Pacientes' },
   { href: '/admin/finance', label: '💰 Finanzas' },
+  { href: '/admin/content', label: '🖼 Contenido' },
   { href: '/admin/settings', label: '⚙️ Configuración' },
 ]
 
