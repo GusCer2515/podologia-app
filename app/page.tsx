@@ -20,9 +20,14 @@ export default function Home() {
           <p className="text-lg mb-8">
             Especialistas en el cuidado de tus pies con tecnología moderna
           </p>
-          <a href="/booking" className="bg-white text-blue-600 px-8 py-3 rounded-lg font-bold hover:bg-gray-100 inline-block">
-            Agendar Hora Ahora
-          </a>
+          <div className="space-x-4">
+            <a href="/booking" className="bg-white text-blue-600 px-8 py-3 rounded-lg font-bold hover:bg-gray-100 inline-block">
+              Agendar Hora Ahora
+            </a>
+            <a href="/admin" className="bg-blue-800 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-900 inline-block">
+              Panel Admin
+            </a>
+          </div>
         </div>
       </section>
 
