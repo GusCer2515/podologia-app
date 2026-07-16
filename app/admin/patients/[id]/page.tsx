@@ -142,37 +142,37 @@ export default function PatientDetailPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-600 mb-1">Nombre</label>
-              <input name="name" value={form.name || ''} onChange={handleField}
+              <input name="name" value={form.name || ''} onChange={handleField} autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-600 mb-1">RUT</label>
-              <input name="rut" value={form.rut || ''} onChange={handleField}
+              <input name="rut" value={form.rut || ''} onChange={handleField} autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-600 mb-1">Teléfono</label>
-              <input name="phone" value={form.phone || ''} onChange={handleField}
+              <input name="phone" value={form.phone || ''} onChange={handleField} autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-600 mb-1">Email</label>
-              <input name="email" value={form.email || ''} onChange={handleField}
+              <input name="email" value={form.email || ''} onChange={handleField} autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-600 mb-1">Fecha de nacimiento</label>
-              <input type="date" name="date_of_birth" value={form.date_of_birth || ''} onChange={handleField}
+              <input type="date" name="date_of_birth" value={form.date_of_birth || ''} onChange={handleField} autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-600 mb-1">CESFAM</label>
-              <input name="cesfam" value={form.cesfam || ''} onChange={handleField}
+              <input name="cesfam" value={form.cesfam || ''} onChange={handleField} autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-gray-600 mb-1">Domicilio</label>
-              <input name="address" value={form.address || ''} onChange={handleField}
+              <input name="address" value={form.address || ''} onChange={handleField} autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
@@ -180,7 +180,7 @@ export default function PatientDetailPage() {
               <select
                 name="insurance"
                 value={form.insurance || ''}
-                onChange={handleField}
+                onChange={handleField} autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">— Sin convenio —</option>
