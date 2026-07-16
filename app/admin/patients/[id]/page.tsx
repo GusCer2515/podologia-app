@@ -7,6 +7,7 @@ import { getPatient, updatePatient, getPatientAppointments, getConvenios } from 
 import ClinicalRecordForm from '@/components/ClinicalRecordForm'
 import AttentionsTab from '@/components/AttentionsTab'
 import DocumentsTab from '@/components/DocumentsTab'
+import AdminScheduler from '@/components/AdminScheduler'
 import { showToast } from '@/components/toast'
 
 const TABS = [
@@ -34,6 +35,14 @@ export default function PatientDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<any>({})
+  // Agendador admin: false = cerrado, null = nueva cita, objeto = reagendar esa cita
+  const [scheduler, setScheduler] = useState<any>(false)
+
+  const reloadAppointments = () => {
+    getPatientAppointments(patientId)
+      .then((appts) => setAppointments(appts || []))
+      .catch(console.error)
+  }
 
   useEffect(() => {
     // Cada recurso por separado: si convenios falla, el paciente igual carga
@@ -203,47 +212,84 @@ export default function PatientDetailPage() {
 
       {/* Tab: Citas */}
       {tab === 'citas' && (
-        <div className="bg-white rounded-lg shadow overflow-x-auto max-w-2xl">
-          {appointments.length === 0 ? (
-            <p className="text-gray-500 py-8 text-center">Este paciente no tiene citas</p>
-          ) : (
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Fecha</th>
-                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Hora</th>
-                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Estado</th>
-                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Notas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {appointments.map((a) => (
-                  <tr key={a.id} className="border-t border-gray-100">
-                    <td className="px-4 py-3 text-sm">
-                      {new Date(a.appointment_date).toLocaleDateString('es-CL')}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {String(a.appointment_date).substring(11, 16)}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-bold ${
-                          a.status === 'scheduled'
-                            ? 'bg-blue-100 text-blue-800'
-                            : a.status === 'completed'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {STATUS_LABEL[a.status] || a.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{a.notes || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="space-y-4 max-w-3xl">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-bold text-gray-800">📅 Citas ({appointments.length})</h2>
+            <button
+              onClick={() => setScheduler(scheduler === null ? false : null)}
+              className="bg-tinta text-marfil px-4 py-2 rounded-full font-bold hover:bg-tinta-suave transition"
+            >
+              {scheduler === null ? 'Cancelar' : '+ Agendar cita'}
+            </button>
+          </div>
+
+          {/* Agendador admin (nueva cita o reagendamiento) */}
+          {scheduler !== false && (
+            <AdminScheduler
+              patientId={patientId}
+              appointment={scheduler}
+              onDone={() => {
+                setScheduler(false)
+                reloadAppointments()
+              }}
+              onCancel={() => setScheduler(false)}
+            />
           )}
+
+          <div className="bg-marfil rounded-2xl border border-arena shadow-sm overflow-x-auto">
+            {appointments.length === 0 ? (
+              <p className="text-gray-500 py-8 text-center">Este paciente no tiene citas</p>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-arena/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Fecha</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Hora</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Estado</th>
+                    <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Notas</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {appointments.map((a) => (
+                    <tr key={a.id} className="border-t border-arena/60 hover:bg-rosa-palo/20">
+                      <td className="px-4 py-3 text-sm">
+                        {new Date(a.appointment_date).toLocaleDateString('es-CL')}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {String(a.appointment_date).substring(11, 16)}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            a.status === 'scheduled'
+                              ? 'bg-blue-100 text-blue-800'
+                              : a.status === 'completed'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}
+                        >
+                          {STATUS_LABEL[a.status] || a.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{a.notes || '—'}</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {(a.status === 'scheduled' || a.status === 'cancelled') && (
+                          <button
+                            onClick={() => setScheduler(a)}
+                            className="text-tinta hover:text-rosa text-sm font-semibold"
+                            title={a.status === 'cancelled' ? 'Volver a agendar esta cita' : 'Cambiar fecha/hora'}
+                          >
+                            🔄 Reagendar
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
 

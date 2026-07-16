@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { bookAppointment, getAvailability, getBlockouts, getOccupiedSlots } from '@/lib/supabase'
+import { bookAppointment } from '@/lib/supabase'
+import { getAvailableSlots } from '@/lib/slots'
 import { CLINIC } from '@/lib/clinicConfig'
 
 type ModalState =
@@ -40,7 +41,7 @@ export default function BookingPage() {
     loadSlots(date)
   }
 
-  // Carga las horas REALMENTE disponibles para la fecha elegida
+  // Carga las horas REALMENTE disponibles (lógica compartida con el admin)
   const loadSlots = async (date: string) => {
     setSlots([])
     setDayMessage('')
@@ -48,57 +49,9 @@ export default function BookingPage() {
     setLoadingSlots(true)
 
     try {
-      const [availability, blockouts, occupied] = await Promise.all([
-        getAvailability(),
-        getBlockouts(),
-        getOccupiedSlots(date)
-      ])
-
-      // ¿Día bloqueado? (feriado, vacaciones, etc.)
-      if ((blockouts ?? []).some((b: any) => b.blocked_date === date)) {
-        setDayMessage('⛔ Ese día no hay atención (feriado o día bloqueado). Elige otra fecha.')
-        return
-      }
-
-      // ¿Hay horario configurado para ese día de la semana?
-      const dayOfWeek = new Date(date + 'T00:00:00').getDay()
-      const config = (availability ?? []).find((a: any) => a.day_of_week === dayOfWeek)
-      if (!config) {
-        setDayMessage('⛔ Ese día no hay atención. Elige otra fecha.')
-        return
-      }
-
-      // Horas ya tomadas ese día (ej: "10:00", "15:30")
-      const occupiedTimes = new Set(
-        occupied.map((o) => String(o.slot).substring(11, 16))
-      )
-
-      // Generar cupos desde hora inicio a hora fin
-      const [sh, sm] = String(config.start_time).split(':').map(Number)
-      const [eh, em] = String(config.end_time).split(':').map(Number)
-      const step = config.slot_duration_minutes || 30
-      const now = new Date()
-      const isToday = date === todayStr
-
-      const generated: string[] = []
-      for (let mins = sh * 60 + sm; mins + step <= eh * 60 + em; mins += step) {
-        const h = String(Math.floor(mins / 60)).padStart(2, '0')
-        const m = String(mins % 60).padStart(2, '0')
-        const time = `${h}:${m}`
-
-        // Saltar horas ocupadas
-        if (occupiedTimes.has(time)) continue
-
-        // Si es hoy, saltar horas que ya pasaron
-        if (isToday && new Date(`${date}T${time}:00`) <= now) continue
-
-        generated.push(time)
-      }
-
-      if (generated.length === 0) {
-        setDayMessage('😔 No quedan horas disponibles ese día. Elige otra fecha.')
-      }
-      setSlots(generated)
+      const res = await getAvailableSlots(date)
+      setSlots(res.slots)
+      setDayMessage(res.message)
     } catch (error) {
       console.error(error)
       setDayMessage('Error cargando horarios. Intenta nuevamente.')

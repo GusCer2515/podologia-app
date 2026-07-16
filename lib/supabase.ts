@@ -354,6 +354,23 @@ export async function getAttentionsBetween(startDate: string, endDate: string) {
   return data
 }
 
+// El admin agenda directamente (el índice único de la BD evita duplicados)
+export async function adminCreateAppointment(patientId: string, datetime: string, notes?: string) {
+  const { error } = await supabase
+    .from('appointments')
+    .insert([{ patient_id: patientId, appointment_date: datetime, notes: notes || null }])
+  if (error) throw error
+}
+
+// Reagendar: nueva fecha/hora y vuelve a estado "agendada"
+export async function rescheduleAppointment(id: string, datetime: string) {
+  const { error } = await supabase
+    .from('appointments')
+    .update({ appointment_date: datetime, status: 'scheduled', updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
 export async function updateAppointmentStatus(id: string, status: string) {
   const { error } = await supabase
     .from('appointments')
