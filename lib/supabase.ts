@@ -193,8 +193,32 @@ export async function getConvenios() {
   return data
 }
 
-export async function addConvenio(nombre: string) {
-  const { error } = await supabase.from('convenios').insert([{ nombre }])
+export async function addConvenio(nombre: string, valor: number) {
+  const { error } = await supabase.from('convenios').insert([{ nombre, valor }])
+  if (error) throw error
+}
+
+export async function updateConvenio(id: string, fields: any) {
+  const { error } = await supabase.from('convenios').update(fields).eq('id', id)
+  if (error) throw error
+}
+
+export async function getSetting(key: string) {
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', key)
+    .maybeSingle()
+
+  if (error) throw error
+  return data?.value ?? null
+}
+
+export async function saveSetting(key: string, value: string) {
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key, value, updated_at: new Date().toISOString() })
+
   if (error) throw error
 }
 

@@ -36,7 +36,12 @@ export default function PatientDetailPage() {
   const [form, setForm] = useState<any>({})
 
   useEffect(() => {
-    Promise.all([getPatient(patientId), getPatientAppointments(patientId), getConvenios()])
+    // Cada recurso por separado: si convenios falla, el paciente igual carga
+    Promise.all([
+      getPatient(patientId),
+      getPatientAppointments(patientId).catch(() => []),
+      getConvenios().catch(() => []),
+    ])
       .then(([p, appts, convs]) => {
         setPatient(p)
         setForm(p)
@@ -246,7 +251,7 @@ export default function PatientDetailPage() {
       {tab === 'ficha' && <ClinicalRecordForm patientId={patientId} />}
 
       {/* Tab: Atenciones */}
-      {tab === 'atenciones' && <AttentionsTab patientId={patientId} />}
+      {tab === 'atenciones' && <AttentionsTab patient={patient} />}
 
       {/* Tab: Documentos */}
       {tab === 'documentos' && <DocumentsTab patient={patient} />}

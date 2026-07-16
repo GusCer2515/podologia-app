@@ -9,7 +9,10 @@ import {
   deleteBlockout,
   getConvenios,
   addConvenio,
+  updateConvenio,
   deleteConvenio,
+  getSetting,
+  saveSetting,
 } from '@/lib/supabase'
 import { showToast } from '@/components/toast'
 
@@ -31,43 +34,48 @@ type DayConfig = {
   slot_duration_minutes: number
 }
 
+const fmtCLP = (n: number) =>
+  new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(n)
+
 export default function SettingsPage() {
   const [days, setDays] = useState<Record<number, DayConfig>>({})
   const [blockouts, setBlockouts] = useState<any[]>([])
   const [convenios, setConvenios] = useState<any[]>([])
+  const [conveniosOk, setConveniosOk] = useState(true)
+  const [precioParticular, setPrecioParticular] = useState('30000')
   const [loading, setLoading] = useState(true)
   const [savingHours, setSavingHours] = useState(false)
+  const [savingPrecio, setSavingPrecio] = useState(false)
   const [newBlockDate, setNewBlockDate] = useState('')
   const [newBlockNote, setNewBlockNote] = useState('')
   const [newConvenio, setNewConvenio] = useState('')
+  const [newConvenioValor, setNewConvenioValor] = useState('25000')
 
   const load = async () => {
-    try {
-      const [avail, blocks, convs] = await Promise.all([
-        getAllAvailability(),
-        getBlockouts(),
-        getConvenios(),
-      ])
+    // Cada recurso se carga por separado: si uno falla, el resto funciona
+    const [avail, blocks, convs, precio] = await Promise.all([
+      getAllAvailability().catch(() => []),
+      getBlockouts().catch(() => []),
+      getConvenios().catch(() => null), // null = tabla no existe aún
+      getSetting('precio_particular').catch(() => null),
+    ])
 
-      const map: Record<number, DayConfig> = {}
-      for (const d of DIAS) {
-        const row = (avail ?? []).find((a: any) => a.day_of_week === d.dow)
-        map[d.dow] = {
-          is_active: row?.is_active ?? false,
-          start_time: row?.start_time?.substring(0, 5) ?? '09:00',
-          end_time: row?.end_time?.substring(0, 5) ?? '18:00',
-          slot_duration_minutes: row?.slot_duration_minutes ?? 30,
-        }
+    const map: Record<number, DayConfig> = {}
+    for (const d of DIAS) {
+      const row = (avail ?? []).find((a: any) => a.day_of_week === d.dow)
+      map[d.dow] = {
+        is_active: row?.is_active ?? false,
+        start_time: row?.start_time?.substring(0, 5) ?? '09:00',
+        end_time: row?.end_time?.substring(0, 5) ?? '18:00',
+        slot_duration_minutes: row?.slot_duration_minutes ?? 30,
       }
-      setDays(map)
-      setBlockouts(blocks ?? [])
-      setConvenios(convs ?? [])
-    } catch (err) {
-      console.error(err)
-      showToast('Error cargando la configuración', 'error')
-    } finally {
-      setLoading(false)
     }
+    setDays(map)
+    setBlockouts(blocks ?? [])
+    setConveniosOk(convs !== null)
+    setConvenios(convs ?? [])
+    if (precio) setPrecioParticular(precio)
+    setLoading(false)
   }
 
   useEffect(() => {
@@ -79,10 +87,9 @@ export default function SettingsPage() {
     setDays((prev) => ({ ...prev, [dow]: { ...prev[dow], [field]: value } }))
 
   const saveHours = async () => {
-    // Validar horas coherentes
     for (const d of DIAS) {
       const c = days[d.dow]
-      if (c.is_active && c.start_time >= c.end_time) {
+      if (c?.is_active && c.start_time >= c.end_time) {
         showToast(`${d.nombre}: la hora de inicio debe ser antes que la de término`, 'error')
         return
       }
@@ -91,6 +98,7 @@ export default function SettingsPage() {
     try {
       for (const d of DIAS) {
         const c = days[d.dow]
+        if (!c) continue
         await saveAvailability(d.dow, {
           is_active: c.is_active,
           start_time: c.start_time,
@@ -104,6 +112,24 @@ export default function SettingsPage() {
       showToast('Error guardando los horarios', 'error')
     } finally {
       setSavingHours(false)
+    }
+  }
+
+  const savePrecioParticular = async () => {
+    const valor = parseInt(precioParticular, 10)
+    if (isNaN(valor) || valor <= 0) {
+      showToast('Ingresa un valor válido', 'error')
+      return
+    }
+    setSavingPrecio(true)
+    try {
+      await saveSetting('precio_particular', String(valor))
+      showToast('Valor particular guardado')
+    } catch (err) {
+      console.error(err)
+      showToast('Error guardando el valor (¿ejecutaste el SQL de fase 7?)', 'error')
+    } finally {
+      setSavingPrecio(false)
     }
   }
 
@@ -137,18 +163,40 @@ export default function SettingsPage() {
 
   const handleAddConvenio = async () => {
     const nombre = newConvenio.trim().toUpperCase()
+    const valor = parseInt(newConvenioValor, 10)
     if (!nombre) {
       showToast('Escribe el nombre del convenio', 'error')
       return
     }
+    if (isNaN(valor) || valor <= 0) {
+      showToast('Ingresa un valor válido para el convenio', 'error')
+      return
+    }
     try {
-      await addConvenio(nombre)
+      await addConvenio(nombre, valor)
       showToast('Convenio agregado')
       setNewConvenio('')
+      setNewConvenioValor('25000')
       load()
     } catch (err) {
       console.error(err)
       showToast('Error agregando el convenio (¿ya existe?)', 'error')
+    }
+  }
+
+  const handleUpdateConvenioValor = async (id: string, valorStr: string) => {
+    const valor = parseInt(valorStr, 10)
+    if (isNaN(valor) || valor <= 0) {
+      showToast('Valor inválido', 'error')
+      return
+    }
+    try {
+      await updateConvenio(id, { valor })
+      showToast('Valor del convenio actualizado')
+      load()
+    } catch (err) {
+      console.error(err)
+      showToast('Error actualizando el valor', 'error')
     }
   }
 
@@ -174,6 +222,15 @@ export default function SettingsPage() {
         Configuración <span className="italic">del negocio</span>
       </h1>
 
+      {/* Aviso si falta el SQL */}
+      {!conveniosOk && (
+        <div className="bg-rosa-palo/60 border border-rosa/40 rounded-2xl px-5 py-4 text-sm text-tinta">
+          ⚠️ <strong>Falta un paso:</strong> ejecuta el script{' '}
+          <code className="bg-white px-2 py-0.5 rounded">supabase/fase7_convenios.sql</code> en el
+          SQL Editor de Supabase para activar Convenios y Valores.
+        </div>
+      )}
+
       {/* ================= HORARIOS ================= */}
       <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
         <h2 className="font-display text-2xl text-tinta font-semibold mb-1">🕐 Horarios de atención</h2>
@@ -185,6 +242,7 @@ export default function SettingsPage() {
         <div className="space-y-2">
           {DIAS.map((d) => {
             const c = days[d.dow]
+            if (!c) return null
             return (
               <div
                 key={d.dow}
@@ -250,6 +308,45 @@ export default function SettingsPage() {
         >
           {savingHours ? 'Guardando...' : '💾 Guardar horarios'}
         </button>
+      </section>
+
+      {/* ================= VALORES DE ATENCIÓN ================= */}
+      <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
+        <h2 className="font-display text-2xl text-tinta font-semibold mb-1">💰 Valores de atención</h2>
+        <p className="text-sm text-gray-500 mb-5">
+          Estos valores se usarán al registrar atenciones y para el flujo de caja.
+        </p>
+
+        <div className="flex flex-wrap items-end gap-3 bg-white border border-arena rounded-xl px-4 py-3">
+          <label className="text-xs text-gray-500">
+            Atención particular (sin convenio)
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-tinta font-bold">$</span>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={precioParticular}
+                onChange={(e) => setPrecioParticular(e.target.value)}
+                className={`w-32 ${inputClass}`}
+              />
+            </div>
+          </label>
+          <button
+            onClick={savePrecioParticular}
+            disabled={savingPrecio}
+            className="bg-tinta text-marfil px-6 py-2 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50"
+          >
+            {savingPrecio ? 'Guardando...' : 'Guardar'}
+          </button>
+          <p className="text-xs text-gray-400 w-full">
+            Valor actual: <strong className="text-tinta">{fmtCLP(parseInt(precioParticular, 10) || 0)}</strong>
+          </p>
+        </div>
+
+        <p className="text-xs text-gray-400 mt-3">
+          💡 El valor de cada convenio se edita en la sección Convenios (abajo).
+        </p>
       </section>
 
       {/* ================= DÍAS BLOQUEADOS ================= */}
@@ -327,18 +424,35 @@ export default function SettingsPage() {
       <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
         <h2 className="font-display text-2xl text-tinta font-semibold mb-1">🤝 Convenios / Previsión</h2>
         <p className="text-sm text-gray-500 mb-5">
-          Los convenios que agregues aquí aparecerán como opciones en la ficha de cada paciente.
+          Cada convenio tiene su valor de atención. Aparecen como opciones en la ficha del paciente.
         </p>
 
-        <div className="flex flex-wrap items-center gap-3 mb-5">
-          <input
-            type="text"
-            value={newConvenio}
-            onChange={(e) => setNewConvenio(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAddConvenio()}
-            placeholder="Ej: FONASA, CONVENIO DMH..."
-            className={`flex-1 min-w-48 ${inputClass}`}
-          />
+        <div className="flex flex-wrap items-end gap-3 mb-5">
+          <label className="text-xs text-gray-500 flex-1 min-w-44">
+            Nombre del convenio
+            <input
+              type="text"
+              value={newConvenio}
+              onChange={(e) => setNewConvenio(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddConvenio()}
+              placeholder="Ej: FONASA, CONVENIO DMH..."
+              className={`block mt-1 w-full ${inputClass}`}
+            />
+          </label>
+          <label className="text-xs text-gray-500">
+            Valor atención
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-tinta font-bold">$</span>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={newConvenioValor}
+                onChange={(e) => setNewConvenioValor(e.target.value)}
+                className={`w-28 ${inputClass}`}
+              />
+            </div>
+          </label>
           <button
             onClick={handleAddConvenio}
             className="bg-tinta text-marfil px-6 py-2 rounded-full font-bold hover:bg-tinta-suave transition"
@@ -350,25 +464,67 @@ export default function SettingsPage() {
         {convenios.length === 0 ? (
           <p className="text-sm text-gray-400">Aún no hay convenios registrados</p>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-1.5">
             {convenios.map((c) => (
-              <span
+              <ConvenioRow
                 key={c.id}
-                className="inline-flex items-center gap-2 bg-rosa-palo/60 text-tinta px-4 py-1.5 rounded-full text-sm font-semibold"
-              >
-                {c.nombre}
-                <button
-                  onClick={() => handleDeleteConvenio(c.id)}
-                  className="text-rosa hover:text-tinta transition"
-                  title="Eliminar convenio"
-                >
-                  ✕
-                </button>
-              </span>
+                convenio={c}
+                onSave={handleUpdateConvenioValor}
+                onDelete={handleDeleteConvenio}
+                inputClass={inputClass}
+              />
             ))}
           </div>
         )}
       </section>
+    </div>
+  )
+}
+
+// Fila de convenio con valor editable
+function ConvenioRow({
+  convenio,
+  onSave,
+  onDelete,
+  inputClass,
+}: {
+  convenio: any
+  onSave: (id: string, valor: string) => void
+  onDelete: (id: string) => void
+  inputClass: string
+}) {
+  const [valor, setValor] = useState(String(convenio.valor ?? 25000))
+  const changed = valor !== String(convenio.valor ?? 25000)
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 px-4 py-2 rounded-xl bg-white border border-arena text-sm">
+      <span className="font-semibold text-tinta flex-1 min-w-32">{convenio.nombre}</span>
+      <div className="flex items-center gap-1">
+        <span className="text-tinta font-bold">$</span>
+        <input
+          type="number"
+          min={0}
+          step={1000}
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          className={`w-28 ${inputClass}`}
+        />
+      </div>
+      {changed && (
+        <button
+          onClick={() => onSave(convenio.id, valor)}
+          className="bg-salvia text-marfil px-4 py-1 rounded-full text-xs font-bold hover:opacity-90 transition"
+        >
+          Guardar
+        </button>
+      )}
+      <button
+        onClick={() => onDelete(convenio.id)}
+        className="text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 transition"
+        title="Eliminar convenio"
+      >
+        🗑
+      </button>
     </div>
   )
 }

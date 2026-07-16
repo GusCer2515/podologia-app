@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { getAttentions, createAttention } from '@/lib/supabase'
+import { getAttentions, createAttention, getConvenios, getSetting } from '@/lib/supabase'
 import { showToast } from '@/components/toast'
 import { SelectField, TextField, TextAreaField, FormSection } from '@/components/fields'
 
@@ -33,13 +33,15 @@ function todayLocal(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export default function AttentionsTab({ patientId }: { patientId: string }) {
+export default function AttentionsTab({ patient }: { patient: any }) {
+  const patientId = patient.id
   const [attentions, setAttentions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<any>({ fecha: todayLocal() })
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [valorDefecto, setValorDefecto] = useState<number>(30000)
 
   const load = useCallback(() => {
     getAttentions(patientId)
@@ -50,7 +52,16 @@ export default function AttentionsTab({ patientId }: { patientId: string }) {
 
   useEffect(() => {
     load()
-  }, [load])
+    // Valor por defecto según convenio del paciente (o particular)
+    Promise.all([
+      getConvenios().catch(() => []),
+      getSetting('precio_particular').catch(() => null),
+    ]).then(([convs, precio]) => {
+      const convenio = (convs ?? []).find((c: any) => c.nombre === patient.insurance)
+      if (convenio?.valor) setValorDefecto(convenio.valor)
+      else if (precio) setValorDefecto(parseInt(precio, 10) || 30000)
+    })
+  }, [load, patient.insurance])
 
   const set = (key: string) => (value: string) =>
     setForm((prev: any) => ({ ...prev, [key]: value }))
@@ -66,6 +77,7 @@ export default function AttentionsTab({ patientId }: { patientId: string }) {
         ...form,
         patient_id: patientId,
         proxima_atencion: form.proxima_atencion || null,
+        valor: parseInt(form.valor, 10) || null,
       })
       showToast('Atención registrada')
       setForm({ fecha: todayLocal() })
@@ -94,8 +106,11 @@ export default function AttentionsTab({ patientId }: { patientId: string }) {
           📝 Historial de Atenciones ({attentions.length})
         </h2>
         <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700"
+          onClick={() => {
+            if (!showForm) setForm({ fecha: todayLocal(), valor: String(valorDefecto) })
+            setShowForm(!showForm)
+          }}
+          className="bg-tinta text-marfil px-4 py-2 rounded-full font-bold hover:bg-tinta-suave transition"
         >
           {showForm ? 'Cancelar' : '+ Nueva Atención'}
         </button>
@@ -110,7 +125,12 @@ export default function AttentionsTab({ patientId }: { patientId: string }) {
             <TextField label="Fecha" type="date" value={form.fecha} onChange={set('fecha')} />
             <TextField label="Tiempo de consulta" value={form.tiempo_consulta} onChange={set('tiempo_consulta')} />
             <TextField label="Próxima atención" type="date" value={form.proxima_atencion} onChange={set('proxima_atencion')} />
+            <TextField label="Valor cobrado ($)" type="number" value={form.valor} onChange={set('valor')} />
           </div>
+          <p className="text-xs text-gray-400 -mt-3">
+            Valor sugerido según {patient.insurance ? `convenio ${patient.insurance}` : 'atención particular'}:{' '}
+            <strong>${valorDefecto.toLocaleString('es-CL')}</strong>
+          </p>
 
           <FormSection title="Procedimientos Realizados">
             {PROCEDIMIENTOS.map(([key, label]) => (
@@ -190,9 +210,14 @@ export default function AttentionsTab({ patientId }: { patientId: string }) {
                       <p className="text-gray-700">{a.observaciones}</p>
                     </div>
                   )}
-                  {(a.tiempo_consulta || a.proxima_atencion) && (
+                  {(a.tiempo_consulta || a.proxima_atencion || a.valor) && (
                     <div>
                       <p className="font-bold text-blue-900 uppercase text-xs mb-1">Datos</p>
+                      {a.valor && (
+                        <p className="text-gray-700 font-semibold">
+                          💰 Valor: ${Number(a.valor).toLocaleString('es-CL')}
+                        </p>
+                      )}
                       {a.tiempo_consulta && <p className="text-gray-700">Duración: {a.tiempo_consulta}</p>}
                       {a.proxima_atencion && (
                         <p className="text-gray-700">
