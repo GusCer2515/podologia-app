@@ -16,6 +16,8 @@ import {
 } from '@/lib/supabase'
 import { showToast } from '@/components/toast'
 import { CLINIC, getClinicInfo, clearClinicInfoCache, type ClinicInfo } from '@/lib/clinicConfig'
+import { getAppointmentsBetween } from '@/lib/supabase'
+import ReagendarWizard from '@/components/ReagendarWizard'
 
 // day_of_week: 0=Domingo ... 6=Sábado (orden visual Lun→Dom)
 const DIAS = [
@@ -51,6 +53,8 @@ export default function SettingsPage() {
   const [newBlockNote, setNewBlockNote] = useState('')
   const [newConvenio, setNewConvenio] = useState('')
   const [newConvenioValor, setNewConvenioValor] = useState('25000')
+  // Wizard de reagendamiento al bloquear un día con citas
+  const [wizard, setWizard] = useState<{ date: string; items: any[] } | null>(null)
 
   const load = async () => {
     // Cada recurso se carga por separado: si uno falla, el resto funciona
@@ -142,6 +146,17 @@ export default function SettingsPage() {
     try {
       await addBlockout({ blocked_date: newBlockDate, notes: newBlockNote || null })
       showToast('Día bloqueado')
+
+      // ¿Había citas agendadas ese día? → wizard de reagendamiento
+      const appts = await getAppointmentsBetween(
+        `${newBlockDate}T00:00:00`,
+        `${newBlockDate}T23:59:59`
+      ).catch(() => [])
+      const activas = (appts ?? []).filter((a: any) => a.status === 'scheduled')
+      if (activas.length > 0) {
+        setWizard({ date: newBlockDate, items: activas })
+      }
+
       setNewBlockDate('')
       setNewBlockNote('')
       load()
@@ -241,6 +256,15 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Wizard de reagendamiento tras bloquear un día con citas */}
+      {wizard && (
+        <ReagendarWizard
+          date={wizard.date}
+          items={wizard.items}
+          onClose={() => setWizard(null)}
+        />
+      )}
+
       {/* ================= DATOS DE CONTACTO ================= */}
       <ContactosSection />
 
@@ -302,7 +326,8 @@ export default function SettingsPage() {
                       >
                         <option value={30}>30 min</option>
                         <option value={45}>45 min</option>
-                        <option value={60}>60 min</option>
+                        <option value={60}>60 min (1 h)</option>
+                        <option value={90}>90 min (1½ h)</option>
                       </select>
                     </label>
                   </>

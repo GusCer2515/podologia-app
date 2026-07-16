@@ -5,29 +5,28 @@ import { getClinicInfo } from '@/lib/clinicConfig'
 // Envía correos de confirmación al reservar una cita:
 // 1. Al paciente (confirmación)
 // 2. A la clínica (aviso de nueva reserva)
-// Usa SendGrid — la API key vive SOLO en el servidor
+// Usa BREVO (plan gratis permanente: 300 correos/día)
+// La API key vive SOLO en el servidor
 // ============================================================
 
 async function sendEmail(to: string, subject: string, html: string, fromName: string) {
-  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
+      'api-key': process.env.BREVO_API_KEY!,
       'Content-Type': 'application/json',
+      accept: 'application/json',
     },
     body: JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
-      from: {
-        email: process.env.SENDGRID_FROM_EMAIL,
-        name: fromName,
-      },
+      sender: { email: process.env.BREVO_FROM_EMAIL, name: fromName },
+      to: [{ email: to }],
       subject,
-      content: [{ type: 'text/html', value: html }],
+      htmlContent: html,
     }),
   })
   if (!res.ok) {
     const detail = await res.text()
-    throw new Error(`SendGrid ${res.status}: ${detail}`)
+    throw new Error(`Brevo ${res.status}: ${detail}`)
   }
 }
 
@@ -80,7 +79,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false }, { status: 400 })
     }
 
-    if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
+    if (!process.env.BREVO_API_KEY || !process.env.BREVO_FROM_EMAIL) {
       // Email no configurado aún: no es un error fatal para el paciente
       return NextResponse.json({ ok: false, reason: 'email_not_configured' })
     }

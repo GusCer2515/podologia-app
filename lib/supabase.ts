@@ -125,6 +125,16 @@ export async function updatePatient(id: string, fields: any) {
   if (error) throw error
 }
 
+export async function createPatientAdmin(fields: any) {
+  const { data, error } = await supabase
+    .from('patients')
+    .insert([fields])
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
 export async function deletePatient(id: string) {
   // Elimina también citas, ficha, atenciones y documentos (cascada en BD)
   const { error } = await supabase.from('patients').delete().eq('id', id)

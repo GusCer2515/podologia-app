@@ -6,8 +6,10 @@ import {
   getAppointmentsBetween,
   getConvenios,
   getSetting,
+  updateAttention,
 } from '@/lib/supabase'
 import Conciliacion from '@/components/Conciliacion'
+import { showToast } from '@/components/toast'
 
 const fmtCLP = (n: number) =>
   new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(n)
@@ -31,6 +33,9 @@ export default function FinancePage() {
   const [convenios, setConvenios] = useState<any[]>([])
   const [precioParticular, setPrecioParticular] = useState(30000)
   const [loading, setLoading] = useState(true)
+  // Registro de conciliaciones: filtros
+  const [filtroConc, setFiltroConc] = useState<'todas' | 'conciliadas' | 'pendientes'>('todas')
+  const [buscarConc, setBuscarConc] = useState('')
 
   const load = useCallback(async (m: string) => {
     setLoading(true)
@@ -221,6 +226,123 @@ export default function FinancePage() {
             <p className="text-xs text-gray-400 mt-2">
               * Valor estimado según convenio (atenciones antiguas sin valor registrado)
             </p>
+          </section>
+
+          {/* ===== Registro de conciliaciones del mes ===== */}
+          <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
+            <h2 className="font-display text-2xl text-tinta font-semibold mb-1">
+              📑 Registro de conciliaciones — {nombreMes}
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Estado de pago de cada atención del mes. Las asociaciones hechas en la
+              conciliación quedan guardadas y se ven aquí.
+            </p>
+
+            <div className="flex flex-wrap gap-3 mb-4">
+              <input
+                type="text"
+                value={buscarConc}
+                onChange={(e) => setBuscarConc(e.target.value)}
+                placeholder="🔍 Buscar paciente o quien transfirió..."
+                className="flex-1 min-w-52 max-w-sm px-4 py-2 border border-arena rounded-full bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave"
+              />
+              <select
+                value={filtroConc}
+                onChange={(e) => setFiltroConc(e.target.value as any)}
+                className="px-4 py-2 border border-arena rounded-full bg-white text-sm font-semibold text-tinta focus:outline-none focus:ring-2 focus:ring-tinta-suave"
+              >
+                <option value="todas">Todas</option>
+                <option value="conciliadas">✅ Conciliadas</option>
+                <option value="pendientes">⏳ Pendientes de pago</option>
+              </select>
+            </div>
+
+            {(() => {
+              const t = buscarConc.toLowerCase().trim()
+              const filas = attentions.filter((a) => {
+                const matchEstado =
+                  filtroConc === 'todas' ||
+                  (filtroConc === 'conciliadas' ? !!a.transfer_id : !a.transfer_id)
+                const matchTexto =
+                  !t ||
+                  a.patients?.name?.toLowerCase().includes(t) ||
+                  a.transfer_nombre?.toLowerCase().includes(t)
+                return matchEstado && matchTexto
+              })
+
+              const toggleBoleta = async (att: any) => {
+                const nuevo = !att.boleta_emitida
+                try {
+                  await updateAttention(att.id, { boleta_emitida: nuevo })
+                  setAttentions((prev) =>
+                    prev.map((x) => (x.id === att.id ? { ...x, boleta_emitida: nuevo } : x))
+                  )
+                  showToast(nuevo ? 'Boleta marcada como emitida' : 'Marca de boleta quitada')
+                } catch {
+                  showToast('Error guardando la marca', 'error')
+                }
+              }
+
+              return filas.length === 0 ? (
+                <p className="text-sm text-gray-400">Sin atenciones con esos filtros</p>
+              ) : (
+                <div className="bg-white rounded-xl border border-arena overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-arena/50">
+                      <tr>
+                        <th className="px-3 py-2.5 text-left font-bold text-tinta">Fecha</th>
+                        <th className="px-3 py-2.5 text-left font-bold text-tinta">Paciente</th>
+                        <th className="px-3 py-2.5 text-right font-bold text-tinta">Valor</th>
+                        <th className="px-3 py-2.5 text-left font-bold text-tinta">Pagada por</th>
+                        <th className="px-3 py-2.5 text-center font-bold text-tinta">Boleta</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filas.map((a) => (
+                        <tr
+                          key={a.id}
+                          className={`border-t border-arena/60 ${
+                            !a.transfer_id ? 'bg-rosa-palo/20' : ''
+                          }`}
+                        >
+                          <td className="px-3 py-2">
+                            {new Date(a.fecha + 'T00:00:00').toLocaleDateString('es-CL')}
+                          </td>
+                          <td className="px-3 py-2 font-semibold text-tinta">
+                            {a.patients?.name || '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right font-bold">
+                            {fmtCLP(valorAtencion(a))}
+                          </td>
+                          <td className="px-3 py-2">
+                            {a.transfer_id ? (
+                              <span className="text-salvia font-semibold">
+                                ✅ {a.transfer_nombre?.trim()}
+                                {a.transfer_monto ? ` (${fmtCLP(a.transfer_monto)})` : ''}
+                                {a.transfer_fecha
+                                  ? ` · ${new Date(a.transfer_fecha + 'T00:00:00').toLocaleDateString('es-CL')}`
+                                  : ''}
+                              </span>
+                            ) : (
+                              <span className="text-rosa font-semibold">⏳ Pendiente</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={!!a.boleta_emitida}
+                              onChange={() => toggleBoleta(a)}
+                              className="w-4 h-4 accent-[#7d8f6f] cursor-pointer"
+                              title="Boleta emitida"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })()}
           </section>
 
           {/* ===== Conciliación bancaria ===== */}
