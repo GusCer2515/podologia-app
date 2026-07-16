@@ -8,7 +8,7 @@ export const CLINIC = {
   subtitle: 'SERVICIOS DE PODOLOGÍA CLÍNICA',
   professional: 'Jahel Rivera Soto',
   rut: '18.483.447-2',
-  instagram: '@vidadecoloresnails',
+  instagram: '@vidadecolores_podologia',
   phone: '+56944187670',
-  email: 'jahelriverasoto7@gmail.com',
+  email: 'podologiavidadecolores@gmail.com',
 }

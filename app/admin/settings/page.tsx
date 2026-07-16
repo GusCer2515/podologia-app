@@ -178,9 +178,18 @@ export default function SettingsPage() {
       setNewConvenio('')
       setNewConvenioValor('25000')
       load()
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      showToast('Error agregando el convenio (¿ya existe?)', 'error')
+      const msg = String(err?.message || '')
+      if (err?.code === '23505') {
+        showToast('Ese convenio ya existe', 'error')
+      } else if (err?.code === '42703' || msg.includes('valor')) {
+        showToast('Falta actualizar la BD: ejecuta supabase/fase7_convenios.sql en Supabase', 'error')
+      } else if (err?.code === '42P01') {
+        showToast('La tabla convenios no existe: ejecuta supabase/fase7_convenios.sql', 'error')
+      } else {
+        showToast(`Error agregando convenio: ${msg || 'desconocido'}`, 'error')
+      }
     }
   }
 
@@ -464,16 +473,27 @@ export default function SettingsPage() {
         {convenios.length === 0 ? (
           <p className="text-sm text-gray-400">Aún no hay convenios registrados</p>
         ) : (
-          <div className="space-y-1.5">
-            {convenios.map((c) => (
-              <ConvenioRow
-                key={c.id}
-                convenio={c}
-                onSave={handleUpdateConvenioValor}
-                onDelete={handleDeleteConvenio}
-                inputClass={inputClass}
-              />
-            ))}
+          <div className="bg-white rounded-xl border border-arena overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-arena/50">
+                <tr>
+                  <th className="px-4 py-2.5 text-left font-bold text-tinta">Convenio</th>
+                  <th className="px-4 py-2.5 text-left font-bold text-tinta">Valor atención</th>
+                  <th className="px-4 py-2.5 text-right font-bold text-tinta">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {convenios.map((c) => (
+                  <ConvenioRow
+                    key={c.id}
+                    convenio={c}
+                    onSave={handleUpdateConvenioValor}
+                    onDelete={handleDeleteConvenio}
+                    inputClass={inputClass}
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
@@ -481,7 +501,7 @@ export default function SettingsPage() {
   )
 }
 
-// Fila de convenio con valor editable
+// Fila de convenio con valor editable (fila de tabla)
 function ConvenioRow({
   convenio,
   onSave,
@@ -497,34 +517,38 @@ function ConvenioRow({
   const changed = valor !== String(convenio.valor ?? 25000)
 
   return (
-    <div className="flex flex-wrap items-center gap-3 px-4 py-2 rounded-xl bg-white border border-arena text-sm">
-      <span className="font-semibold text-tinta flex-1 min-w-32">{convenio.nombre}</span>
-      <div className="flex items-center gap-1">
-        <span className="text-tinta font-bold">$</span>
-        <input
-          type="number"
-          min={0}
-          step={1000}
-          value={valor}
-          onChange={(e) => setValor(e.target.value)}
-          className={`w-28 ${inputClass}`}
-        />
-      </div>
-      {changed && (
+    <tr className="border-t border-arena/60 hover:bg-rosa-palo/20">
+      <td className="px-4 py-2 font-semibold text-tinta">{convenio.nombre}</td>
+      <td className="px-4 py-2">
+        <div className="flex items-center gap-1">
+          <span className="text-tinta font-bold">$</span>
+          <input
+            type="number"
+            min={0}
+            step={1000}
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            className={`w-28 ${inputClass}`}
+          />
+          {changed && (
+            <button
+              onClick={() => onSave(convenio.id, valor)}
+              className="ml-2 bg-salvia text-marfil px-4 py-1 rounded-full text-xs font-bold hover:opacity-90 transition"
+            >
+              Guardar
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-2 text-right">
         <button
-          onClick={() => onSave(convenio.id, valor)}
-          className="bg-salvia text-marfil px-4 py-1 rounded-full text-xs font-bold hover:opacity-90 transition"
+          onClick={() => onDelete(convenio.id)}
+          className="text-rosa hover:bg-rosa-palo/50 rounded-full px-2.5 py-1 transition text-sm font-semibold"
+          title="Eliminar convenio"
         >
-          Guardar
+          🗑 Eliminar
         </button>
-      )}
-      <button
-        onClick={() => onDelete(convenio.id)}
-        className="text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 transition"
-        title="Eliminar convenio"
-      >
-        🗑
-      </button>
-    </div>
+      </td>
+    </tr>
   )
 }
