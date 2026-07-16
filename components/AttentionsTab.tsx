@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { getAttentions, createAttention } from '@/lib/supabase'
+import { showToast } from '@/components/toast'
 import { SelectField, TextField, TextAreaField, FormSection } from '@/components/fields'
 
 const SI_NO = ['SI', 'NO']
@@ -56,7 +57,7 @@ export default function AttentionsTab({ patientId }: { patientId: string }) {
 
   const save = async () => {
     if (!form.fecha) {
-      alert('La fecha es obligatoria')
+      showToast('La fecha es obligatoria', 'error')
       return
     }
     setSaving(true)
@@ -66,12 +67,12 @@ export default function AttentionsTab({ patientId }: { patientId: string }) {
         patient_id: patientId,
         proxima_atencion: form.proxima_atencion || null,
       })
-      alert('✅ Atención registrada')
+      showToast('Atención registrada')
       setForm({ fecha: todayLocal() })
       setShowForm(false)
       load()
     } catch (err) {
-      alert('❌ Error registrando la atención')
+      showToast('Error registrando la atención', 'error')
       console.error(err)
     } finally {
       setSaving(false)

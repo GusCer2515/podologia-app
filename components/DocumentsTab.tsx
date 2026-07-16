@@ -6,9 +6,12 @@ import {
   createDocument,
   uploadDocumentPdf,
   getDocumentSignedUrl,
+  getAvailability,
+  getBlockouts,
 } from '@/lib/supabase'
 import { SelectField, TextField, TextAreaField } from '@/components/fields'
 import { CLINIC } from '@/lib/clinicConfig'
+import { showToast } from '@/components/toast'
 
 // Edad a partir de la fecha de nacimiento
 function computeAge(dateOfBirth?: string): string {
@@ -38,6 +41,8 @@ export default function DocumentsTab({ patient }: { patient: any }) {
   const [saving, setSaving] = useState(false)
   const [working, setWorking] = useState<string | null>(null)
   const [form, setForm] = useState<any>({ tipo: 'receta' })
+  const [activeDays, setActiveDays] = useState<number[]>([])
+  const [blockedDates, setBlockedDates] = useState<string[]>([])
 
   const load = useCallback(() => {
     getDocuments(patient.id)
@@ -48,15 +53,40 @@ export default function DocumentsTab({ patient }: { patient: any }) {
 
   useEffect(() => {
     load()
+    // Cargar días de atención y bloqueos (para validar próximo control)
+    Promise.all([getAvailability(), getBlockouts()])
+      .then(([avail, blocks]) => {
+        setActiveDays((avail ?? []).map((a: any) => a.day_of_week))
+        setBlockedDates((blocks ?? []).map((b: any) => String(b.blocked_date)))
+      })
+      .catch(console.error)
   }, [load])
 
   const set = (key: string) => (value: string) =>
     setForm((prev: any) => ({ ...prev, [key]: value }))
 
+  // Próximo control: solo días con atención y no bloqueados
+  const setProximoControl = (value: string) => {
+    if (value) {
+      const dow = new Date(value + 'T00:00:00').getDay()
+      if (!activeDays.includes(dow)) {
+        showToast('Ese día no hay atención. Elige un día hábil.', 'error')
+        setForm((prev: any) => ({ ...prev, proximo_control: '' }))
+        return
+      }
+      if (blockedDates.includes(value)) {
+        showToast('Ese día está bloqueado (feriado/vacaciones). Elige otro.', 'error')
+        setForm((prev: any) => ({ ...prev, proximo_control: '' }))
+        return
+      }
+    }
+    setForm((prev: any) => ({ ...prev, proximo_control: value }))
+  }
+
   // Crear documento: genera el PDF, lo sube y guarda el registro
   const save = async () => {
     if (!form.diagnostico && !form.contenido) {
-      alert('Completa al menos el diagnóstico o el contenido')
+      showToast('Completa al menos el diagnóstico o el contenido', 'error')
       return
     }
     setSaving(true)
@@ -89,12 +119,12 @@ export default function DocumentsTab({ patient }: { patient: any }) {
         pdf_url: path,
       })
 
-      alert('✅ Documento generado correctamente')
+      showToast('Documento generado correctamente')
       setForm({ tipo: 'receta' })
       setShowForm(false)
       load()
     } catch (err) {
-      alert('❌ Error generando el documento')
+      showToast('Error generando el documento', 'error')
       console.error(err)
     } finally {
       setSaving(false)
@@ -107,7 +137,7 @@ export default function DocumentsTab({ patient }: { patient: any }) {
       const url = await getDocumentSignedUrl(doc.pdf_url)
       window.open(url, '_blank')
     } catch (err) {
-      alert('❌ Error abriendo el PDF')
+      showToast('Error abriendo el PDF', 'error')
       console.error(err)
     } finally {
       setWorking(null)
@@ -130,7 +160,7 @@ export default function DocumentsTab({ patient }: { patient: any }) {
         '_blank'
       )
     } catch (err) {
-      alert('❌ Error generando el enlace')
+      showToast('Error generando el enlace', 'error')
       console.error(err)
     } finally {
       setWorking(null)
@@ -170,7 +200,7 @@ export default function DocumentsTab({ patient }: { patient: any }) {
                 label="Fecha de próximo control"
                 type="date"
                 value={form.proximo_control}
-                onChange={set('proximo_control')}
+                onChange={setProximoControl}
               />
             )}
           </div>

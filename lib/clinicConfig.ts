@@ -5,7 +5,7 @@
 
 export const CLINIC = {
   brand: 'Vida de Colores',
-  subtitle: 'SERVICIOS DE PODOLOGÍA CLÍNICA Y NAILS ARTIST',
+  subtitle: 'SERVICIOS DE PODOLOGÍA CLÍNICA',
   professional: 'Jahel Rivera Soto',
   rut: '18.483.447-2',
   instagram: '@vidadecoloresnails',

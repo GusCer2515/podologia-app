@@ -5,10 +5,12 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { signIn, signOut, getSession } from '@/lib/supabase'
+import { Toaster } from '@/components/toast'
 
 const NAV_ITEMS = [
   { href: '/admin', label: '📅 Agenda' },
   { href: '/admin/patients', label: '👥 Pacientes' },
+  { href: '/admin/settings', label: '⚙️ Configuración' },
 ]
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
@@ -169,6 +171,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
       {/* Contenido */}
       <main className="flex-1 p-6 overflow-x-auto">{children}</main>
+
+      {/* Notificaciones elegantes */}
+      <Toaster />
     </div>
   )
 }

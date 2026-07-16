@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { getAppointmentsBetween, updateAppointmentStatus } from '@/lib/supabase'
+import { showToast } from '@/components/toast'
 
 const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
@@ -66,7 +67,7 @@ export default function AdminAgendaPage() {
       await updateAppointmentStatus(id, status)
       loadWeek(weekStart)
     } catch (err) {
-      alert('Error actualizando la cita')
+      showToast('Error actualizando la cita', 'error')
       console.error(err)
     }
   }

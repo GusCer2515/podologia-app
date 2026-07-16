@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { getPatient, updatePatient, getPatientAppointments } from '@/lib/supabase'
+import { getPatient, updatePatient, getPatientAppointments, getConvenios } from '@/lib/supabase'
 import ClinicalRecordForm from '@/components/ClinicalRecordForm'
 import AttentionsTab from '@/components/AttentionsTab'
 import DocumentsTab from '@/components/DocumentsTab'
+import { showToast } from '@/components/toast'
 
 const TABS = [
   { key: 'info', label: '📋 Información' },
@@ -29,16 +30,18 @@ export default function PatientDetailPage() {
   const [tab, setTab] = useState('info')
   const [patient, setPatient] = useState<any>(null)
   const [appointments, setAppointments] = useState<any[]>([])
+  const [convenios, setConvenios] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<any>({})
 
   useEffect(() => {
-    Promise.all([getPatient(patientId), getPatientAppointments(patientId)])
-      .then(([p, appts]) => {
+    Promise.all([getPatient(patientId), getPatientAppointments(patientId), getConvenios()])
+      .then(([p, appts, convs]) => {
         setPatient(p)
         setForm(p)
         setAppointments(appts || [])
+        setConvenios(convs || [])
       })
       .catch(console.error)
       .finally(() => setLoading(false))
@@ -63,9 +66,9 @@ export default function PatientDetailPage() {
         insurance: form.insurance,
       })
       setPatient(form)
-      alert('✅ Datos guardados')
+      showToast('Datos del paciente guardados')
     } catch (err) {
-      alert('❌ Error guardando datos')
+      showToast('Error guardando los datos', 'error')
       console.error(err)
     } finally {
       setSaving(false)
@@ -89,30 +92,33 @@ export default function PatientDetailPage() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="mb-6">
-        <Link href="/admin/patients" className="text-sm text-tinta-suave hover:text-tinta transition">
-          ← Volver a pacientes
-        </Link>
-        <h1 className="font-display text-3xl text-tinta font-medium mt-2">{patient.name}</h1>
-        <p className="text-sm text-gray-500">
-          {patient.rut || 'Sin RUT'} · {patient.phone || 'Sin teléfono'} · {patient.email}
-        </p>
-      </div>
+      {/* Header + Tabs: fijos al hacer scroll */}
+      <div className="sticky top-0 z-20 bg-crema -mx-6 px-6 pt-2 pb-3 mb-6 border-b border-arena/60">
+        <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
+          <div>
+            <Link href="/admin/patients" className="text-sm text-tinta-suave hover:text-tinta transition">
+              ← Volver a pacientes
+            </Link>
+            <h1 className="font-display text-3xl text-tinta font-medium mt-1">{patient.name}</h1>
+            <p className="text-sm text-gray-500">
+              {patient.rut || 'Sin RUT'} · {patient.phone || 'Sin teléfono'} · {patient.email}
+            </p>
+          </div>
+        </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-1 mb-6 bg-marfil rounded-full border border-arena shadow-sm p-1">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-full text-sm font-semibold transition ${
-              tab === t.key ? 'bg-tinta text-marfil' : 'text-tinta-suave hover:bg-rosa-palo/40'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+        <div className="flex flex-wrap gap-1 bg-marfil rounded-full border border-arena shadow-sm p-1 w-fit">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition ${
+                tab === t.key ? 'bg-tinta text-marfil' : 'text-tinta-suave hover:bg-rosa-palo/40'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tab: Información */}
@@ -157,8 +163,26 @@ export default function PatientDetailPage() {
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-600 mb-1">Convenio / Previsión</label>
-              <input name="insurance" value={form.insurance || ''} onChange={handleField}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <select
+                name="insurance"
+                value={form.insurance || ''}
+                onChange={handleField}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— Sin convenio —</option>
+                {/* Si el valor actual no está en la lista, se conserva */}
+                {form.insurance && !convenios.some((c) => c.nombre === form.insurance) && (
+                  <option value={form.insurance}>{form.insurance}</option>
+                )}
+                {convenios.map((c) => (
+                  <option key={c.id} value={c.nombre}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                Los convenios se administran en ⚙️ Configuración
+              </p>
             </div>
           </div>
 

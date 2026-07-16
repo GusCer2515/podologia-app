@@ -137,6 +137,73 @@ export async function getPatientAppointments(patientId: string) {
 }
 
 // ============================================================
+// CONFIGURACIÓN: horarios, bloqueos y convenios (solo admin)
+// ============================================================
+
+export async function getAllAvailability() {
+  const { data, error } = await supabase
+    .from('availability')
+    .select('*')
+    .order('day_of_week', { ascending: true })
+
+  if (error) throw error
+  return data
+}
+
+export async function saveAvailability(dayOfWeek: number, fields: any) {
+  const { data: existing, error: qError } = await supabase
+    .from('availability')
+    .select('id')
+    .eq('day_of_week', dayOfWeek)
+    .limit(1)
+
+  if (qError) throw qError
+
+  if (existing && existing.length > 0) {
+    const { error } = await supabase
+      .from('availability')
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq('id', existing[0].id)
+    if (error) throw error
+  } else {
+    const { error } = await supabase
+      .from('availability')
+      .insert([{ ...fields, day_of_week: dayOfWeek }])
+    if (error) throw error
+  }
+}
+
+export async function addBlockout(fields: any) {
+  const { error } = await supabase.from('blockouts').insert([fields])
+  if (error) throw error
+}
+
+export async function deleteBlockout(id: string) {
+  const { error } = await supabase.from('blockouts').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function getConvenios() {
+  const { data, error } = await supabase
+    .from('convenios')
+    .select('*')
+    .order('nombre', { ascending: true })
+
+  if (error) throw error
+  return data
+}
+
+export async function addConvenio(nombre: string) {
+  const { error } = await supabase.from('convenios').insert([{ nombre }])
+  if (error) throw error
+}
+
+export async function deleteConvenio(id: string) {
+  const { error } = await supabase.from('convenios').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ============================================================
 // FICHA CLÍNICA
 // ============================================================
 

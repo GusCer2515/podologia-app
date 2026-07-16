@@ -30,9 +30,9 @@ const SERVICIOS = [
     desc: 'Atención especializada y preventiva para pacientes con diabetes.',
   },
   {
-    icon: '💅',
-    title: 'Nails Artist',
-    desc: 'Manicure artística y cuidado estético de tus uñas con dedicación.',
+    icon: '🦶',
+    title: 'Grietas y talones',
+    desc: 'Tratamiento de hiperqueratosis y grietas para talones sanos.',
   },
 ]
 
@@ -72,12 +72,20 @@ export default function Home() {
             <a href="#contacto" className="hover:text-tinta transition">Contacto</a>
           </nav>
 
-          <Link
-            href="/booking"
-            className="bg-tinta text-marfil px-5 py-2 rounded-full text-sm font-bold hover:bg-tinta-suave transition"
-          >
-            Agendar hora
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/admin"
+              className="text-sm font-semibold text-tinta-suave hover:text-tinta transition"
+            >
+              🔐 Ingresar
+            </Link>
+            <Link
+              href="/booking"
+              className="bg-tinta text-marfil px-5 py-2 rounded-full text-sm font-bold hover:bg-tinta-suave transition"
+            >
+              Agendar hora
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -86,7 +94,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-5 pt-16 pb-20 md:pt-24 md:pb-28 grid md:grid-cols-2 gap-12 items-center">
           <div>
             <p className="animate-fade-up text-xs tracking-[0.3em] uppercase text-rosa font-bold mb-5">
-              Podología clínica · Nails artist
+              Podología clínica
             </p>
             <h1 className="animate-fade-up fade-delay-1 font-display text-5xl md:text-6xl leading-[1.05] text-tinta font-medium">
               Tus pies,

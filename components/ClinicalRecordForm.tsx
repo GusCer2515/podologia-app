@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getClinicalRecord, upsertClinicalRecord } from '@/lib/supabase'
+import { showToast } from '@/components/toast'
 import { SelectField, TextField, TextAreaField, FormSection } from '@/components/fields'
 
 const SI_NO = ['SI', 'NO']
@@ -52,9 +53,9 @@ export default function ClinicalRecordForm({ patientId }: { patientId: string })
       for (const key of FIELD_KEYS) payload[key] = form[key] ?? null
       await upsertClinicalRecord(patientId, payload)
       setLastUpdate(new Date().toISOString())
-      alert('✅ Ficha clínica guardada')
+      showToast('Ficha clínica guardada')
     } catch (err) {
-      alert('❌ Error guardando la ficha')
+      showToast('Error guardando la ficha', 'error')
       console.error(err)
     } finally {
       setSaving(false)
