@@ -120,8 +120,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen bg-crema flex">
-      {/* Sidebar */}
-      <aside className="w-60 bg-marfil border-r border-arena flex flex-col shrink-0">
+      {/* Sidebar: fijo a la pantalla — menú y cierre de sesión siempre visibles */}
+      <aside className="w-60 bg-marfil border-r border-arena flex flex-col shrink-0 sticky top-0 h-screen">
         <div className="p-5 border-b border-arena">
           <h1 className="font-display italic text-2xl text-tinta font-semibold">
             Vida de Colores
@@ -131,7 +131,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           </p>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const active =
               item.href === '/admin'
