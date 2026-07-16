@@ -276,6 +276,7 @@ function CaseCard({ caso, reload, onDelete }: { caso: any; reload: () => void; o
 function PostsManager({ posts, reload }: { posts: any[]; reload: () => void }) {
   const [titulo, setTitulo] = useState('')
   const [contenido, setContenido] = useState('')
+  const [videoUrl, setVideoUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -292,11 +293,13 @@ function PostsManager({ posts, reload }: { posts: any[]; reload: () => void }) {
         titulo: titulo.trim(),
         contenido: contenido.trim(),
         image_url: imageUrl,
+        video_url: videoUrl.trim() || null,
         publicado: true,
       })
       showToast('Publicación creada')
       setTitulo('')
       setContenido('')
+      setVideoUrl('')
       setFile(null)
       reload()
     } catch (err) {
@@ -361,6 +364,18 @@ function PostsManager({ posts, reload }: { posts: any[]; reload: () => void }) {
             accept="image/*"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="block text-sm text-gray-600 file:mr-3 file:px-4 file:py-2 file:rounded-full file:border-0 file:bg-tinta file:text-marfil file:font-bold file:cursor-pointer"
+          />
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">
+            🎬 Link de video (opcional — YouTube se muestra incrustado; otros links como botón)
+          </p>
+          <input
+            type="url"
+            value={videoUrl}
+            onChange={(e) => setVideoUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+            className={inputClass}
           />
         </div>
         <button

@@ -57,3 +57,18 @@ body {
 .fade-delay-3 {
   animation-delay: 0.36s;
 }
+
+/* Flotación suave para elementos decorativos */
+@keyframes float-suave {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+.animate-float {
+  animation: float-suave 6s ease-in-out infinite;
+}
