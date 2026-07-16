@@ -9,7 +9,41 @@ import Image from 'next/image'
 // 2. Agrega una línea aquí con la ruta y su descripción
 // ============================================================
 const CASOS: { src: string; title: string; desc: string }[] = [
-  // { src: '/images/casos/caso-1.jpg', title: 'Onicomicosis', desc: 'Tratamiento completo en 4 sesiones' },
+  {
+    src: '/images/casos/Caso1.jpeg',
+    title: 'Onicomicosis',
+    desc: 'Tratamiento antimicótico y resecado de hiperqueratosis',
+  },
+  {
+    src: '/images/casos/Caso2.jpeg',
+    title: 'Tratamiento antimicótico',
+    desc: 'Aplicación localizada en uña afectada por hongos',
+  },
+  {
+    src: '/images/casos/Caso3.jpeg',
+    title: 'Heloma plantar',
+    desc: 'Resecado de queratoma en la planta del pie',
+  },
+  {
+    src: '/images/casos/Caso4.jpeg',
+    title: 'Hiperqueratosis plantar',
+    desc: 'Evaluación y tratamiento integral de la planta del pie',
+  },
+  {
+    src: '/images/casos/Caso5.jpeg',
+    title: 'Rehabilitación ungueal',
+    desc: 'Recuperación de uñas dañadas con seguimiento clínico',
+  },
+  {
+    src: '/images/casos/Caso6.jpeg',
+    title: 'Grietas del talón',
+    desc: 'Tratamiento de hiperqueratosis y grietas del talón',
+  },
+  {
+    src: '/images/casos/Caso7.jpeg',
+    title: 'Uña encarnada',
+    desc: 'Tratamiento de onicocriptosis y alivio del dolor',
+  },
 ]
 
 const INTERVALO_MS = 4500
@@ -45,11 +79,21 @@ export default function CasosCarousel() {
                 i === index ? 'opacity-100' : 'opacity-0'
               }`}
             >
+              {/* Fondo: la misma foto difuminada (rellena el espacio) */}
+              <Image
+                src={caso.src}
+                alt=""
+                fill
+                aria-hidden
+                className="object-cover blur-2xl scale-110 opacity-60"
+                sizes="(max-width: 768px) 100vw, 768px"
+              />
+              {/* Foto completa al centro, sin recortes */}
               <Image
                 src={caso.src}
                 alt={caso.title}
                 fill
-                className="object-cover"
+                className="object-contain"
                 sizes="(max-width: 768px) 100vw, 768px"
               />
               {/* Leyenda sobre degradado */}
