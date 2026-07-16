@@ -27,14 +27,15 @@ export async function getClinicInfo(): Promise<ClinicInfo> {
   try {
     const value = await getSetting('clinic_info')
     if (value) {
-      cached = { ...CLINIC, ...JSON.parse(value) }
-      return cached
+      const merged: ClinicInfo = { ...CLINIC, ...JSON.parse(value) }
+      cached = merged
+      return merged
     }
   } catch {
     // sin configuración guardada o sin permisos: usar valores por defecto
   }
   cached = CLINIC
-  return cached
+  return CLINIC
 }
 
 // Llamar tras guardar cambios para que se reflejen sin recargar
