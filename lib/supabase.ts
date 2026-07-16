@@ -136,6 +136,58 @@ export async function getPatientAppointments(patientId: string) {
   return data
 }
 
+// ============================================================
+// FICHA CLÍNICA
+// ============================================================
+
+export async function getClinicalRecord(patientId: string) {
+  const { data, error } = await supabase
+    .from('clinical_records')
+    .select('*')
+    .eq('patient_id', patientId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+export async function upsertClinicalRecord(patientId: string, fields: any) {
+  const { error } = await supabase
+    .from('clinical_records')
+    .upsert(
+      { ...fields, patient_id: patientId, updated_at: new Date().toISOString() },
+      { onConflict: 'patient_id' }
+    )
+
+  if (error) throw error
+}
+
+// ============================================================
+// ATENCIONES (historial)
+// ============================================================
+
+export async function getAttentions(patientId: string) {
+  const { data, error } = await supabase
+    .from('attentions')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('fecha', { ascending: false })
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data
+}
+
+export async function createAttention(payload: any) {
+  const { data, error } = await supabase
+    .from('attentions')
+    .insert([payload])
+    .select()
+
+  if (error) throw error
+  return data
+}
+
 export async function getAppointmentsBetween(startIso: string, endIso: string) {
   const { data, error } = await supabase
     .from('appointments')
