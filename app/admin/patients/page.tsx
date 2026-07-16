@@ -29,7 +29,7 @@ export default function PatientsPage() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">👥 Pacientes</h1>
+        <h1 className="font-display text-3xl text-tinta font-medium">Pacientes</h1>
         <p className="text-sm text-gray-500">{patients.length} pacientes registrados</p>
       </div>
 
@@ -38,19 +38,19 @@ export default function PatientsPage() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="🔍 Buscar por nombre, RUT, email o teléfono..."
-        className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+        className="w-full max-w-md px-4 py-2 border border-arena rounded-full mb-6 focus:outline-none focus:ring-2 focus:ring-tinta-suave bg-marfil"
       />
 
       {loading ? (
         <p className="text-gray-500 py-8 text-center">Cargando pacientes...</p>
       ) : filtered.length === 0 ? (
-        <p className="text-gray-500 py-8 text-center bg-white rounded-lg shadow">
+        <p className="text-gray-500 py-8 text-center bg-marfil rounded-2xl border border-arena shadow-sm">
           {term ? 'No se encontraron pacientes con esa búsqueda' : 'Aún no hay pacientes registrados'}
         </p>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-x-auto">
+        <div className="bg-marfil rounded-2xl border border-arena shadow-sm overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="bg-arena/50">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Nombre</th>
                 <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">RUT</th>
@@ -62,7 +62,7 @@ export default function PatientsPage() {
             </thead>
             <tbody>
               {filtered.map((p) => (
-                <tr key={p.id} className="border-t border-gray-100 hover:bg-blue-50">
+                <tr key={p.id} className="border-t border-gray-100 hover:bg-rosa-palo/30">
                   <td className="px-4 py-3 text-sm font-semibold text-gray-800">{p.name}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{p.rut || '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{p.phone || '—'}</td>
@@ -75,7 +75,7 @@ export default function PatientsPage() {
                   <td className="px-4 py-3 text-right">
                     <Link
                       href={`/admin/patients/${p.id}`}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-semibold"
+                      className="text-tinta hover:text-rosa text-sm font-semibold"
                     >
                       Ver ficha →
                     </Link>

@@ -91,23 +91,23 @@ export default function PatientDetailPage() {
     <div>
       {/* Header */}
       <div className="mb-6">
-        <Link href="/admin/patients" className="text-sm text-blue-600 hover:underline">
+        <Link href="/admin/patients" className="text-sm text-tinta-suave hover:text-tinta transition">
           ← Volver a pacientes
         </Link>
-        <h1 className="text-2xl font-bold text-gray-800 mt-2">{patient.name}</h1>
+        <h1 className="font-display text-3xl text-tinta font-medium mt-2">{patient.name}</h1>
         <p className="text-sm text-gray-500">
           {patient.rut || 'Sin RUT'} · {patient.phone || 'Sin teléfono'} · {patient.email}
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 mb-6 bg-white rounded-lg shadow p-1">
+      <div className="flex flex-wrap gap-1 mb-6 bg-marfil rounded-full border border-arena shadow-sm p-1">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
-              tab === t.key ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-blue-50'
+            className={`px-4 py-2 rounded-full text-sm font-semibold transition ${
+              tab === t.key ? 'bg-tinta text-marfil' : 'text-tinta-suave hover:bg-rosa-palo/40'
             }`}
           >
             {t.label}
@@ -165,7 +165,7 @@ export default function PatientDetailPage() {
           <button
             onClick={saveInfo}
             disabled={saving}
-            className="mt-6 bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50"
+            className="mt-6 bg-tinta text-marfil px-6 py-2 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50"
           >
             {saving ? 'Guardando...' : 'Guardar cambios'}
           </button>

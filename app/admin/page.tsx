@@ -98,24 +98,24 @@ export default function AdminAgendaPage() {
     <div>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">📅 Agenda Semanal</h1>
+        <h1 className="font-display text-3xl text-tinta font-medium">Agenda <span className="italic">semanal</span></h1>
 
         <div className="flex items-center gap-2">
           <button
             onClick={() => changeWeek(-7)}
-            className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold"
+            className="px-4 py-1.5 bg-marfil border border-arena rounded-full hover:bg-arena/50 font-semibold text-tinta transition"
           >
             ← Anterior
           </button>
           <button
             onClick={() => setWeekStart(mondayOf(new Date()))}
-            className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold"
+            className="px-4 py-1.5 bg-tinta text-marfil rounded-full hover:bg-tinta-suave font-semibold transition"
           >
             Hoy
           </button>
           <button
             onClick={() => changeWeek(7)}
-            className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold"
+            className="px-4 py-1.5 bg-marfil border border-arena rounded-full hover:bg-arena/50 font-semibold text-tinta transition"
           >
             Siguiente →
           </button>
@@ -124,17 +124,17 @@ export default function AdminAgendaPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
           <p className="text-sm text-gray-500">Citas pendientes hoy</p>
-          <p className="text-3xl font-bold text-blue-600">{todayCount}</p>
+          <p className="text-3xl font-bold text-tinta">{todayCount}</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
           <p className="text-sm text-gray-500">Citas esta semana</p>
-          <p className="text-3xl font-bold text-indigo-600">{weekCount}</p>
+          <p className="text-3xl font-bold text-rosa">{weekCount}</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
           <p className="text-sm text-gray-500">Completadas esta semana</p>
-          <p className="text-3xl font-bold text-green-600">{completedCount}</p>
+          <p className="text-3xl font-bold text-salvia">{completedCount}</p>
         </div>
       </div>
 
@@ -151,12 +151,12 @@ export default function AdminAgendaPage() {
             <div
               key={day.iso}
               className={`bg-white rounded-lg shadow min-h-32 ${
-                day.isToday ? 'ring-2 ring-blue-500' : ''
+                day.isToday ? 'ring-2 ring-tinta' : ''
               }`}
             >
               <div
                 className={`px-3 py-2 border-b text-center rounded-t-lg ${
-                  day.isToday ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700'
+                  day.isToday ? 'bg-tinta text-marfil' : 'bg-arena/50 text-tinta'
                 }`}
               >
                 <p className="text-xs font-semibold uppercase">{day.name}</p>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { signIn, signOut, getSession } from '@/lib/supabase'
 
@@ -17,6 +18,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loggingIn, setLoggingIn] = useState(false)
+  const [loginError, setLoginError] = useState('')
 
   useEffect(() => {
     getSession().then((session) => {
@@ -27,17 +29,18 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   const handleLogin = async () => {
     if (!email || !password) {
-      alert('Ingresa email y contraseña')
+      setLoginError('Ingresa tu email y contraseña')
       return
     }
     setLoggingIn(true)
+    setLoginError('')
     try {
       await signIn(email, password)
       setAuthed(true)
       setEmail('')
       setPassword('')
     } catch {
-      alert('Email o contraseña incorrectos')
+      setLoginError('Email o contraseña incorrectos')
     } finally {
       setLoggingIn(false)
     }
@@ -50,27 +53,35 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   if (checking) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center">
-        <p className="text-gray-600">Cargando...</p>
+      <div className="min-h-screen bg-crema flex items-center justify-center">
+        <p className="font-display italic text-2xl text-tinta-suave">Cargando...</p>
       </div>
     )
   }
 
   if (!authed) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
-          <h1 className="text-3xl font-bold text-blue-900 mb-2 text-center">🔐 Admin</h1>
-          <p className="text-gray-600 text-center mb-6">
-            Acceso restringido solo para administrador
-          </p>
+      <div className="min-h-screen bg-crema flex items-center justify-center p-4">
+        <div className="bg-marfil p-9 rounded-3xl shadow-xl shadow-tinta/10 border border-arena max-w-md w-full">
+          <div className="text-center mb-7">
+            <Image
+              src="/pdf-assets/logo.png"
+              alt="Vida de Colores"
+              width={220}
+              height={110}
+              className="mx-auto"
+            />
+            <p className="text-xs tracking-[0.25em] uppercase text-rosa font-bold mt-3">
+              Panel administrativo
+            </p>
+          </div>
 
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-2.5 border border-arena rounded-xl bg-white mb-3 focus:outline-none focus:ring-2 focus:ring-tinta-suave"
           />
 
           <input
@@ -78,29 +89,44 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Contraseña"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-2.5 border border-arena rounded-xl bg-white mb-3 focus:outline-none focus:ring-2 focus:ring-tinta-suave"
             onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
           />
+
+          {loginError && (
+            <p className="text-sm text-rosa font-semibold mb-3 text-center">{loginError}</p>
+          )}
 
           <button
             onClick={handleLogin}
             disabled={loggingIn}
-            className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition disabled:opacity-50"
+            className="w-full bg-tinta text-marfil px-4 py-3 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50"
           >
             {loggingIn ? 'Ingresando...' : 'Ingresar'}
           </button>
+
+          <Link
+            href="/"
+            className="block text-center text-sm text-tinta-suave hover:text-tinta mt-5 transition"
+          >
+            ← Volver al sitio
+          </Link>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen bg-crema flex">
       {/* Sidebar */}
-      <aside className="w-60 bg-white shadow-lg flex flex-col shrink-0">
-        <div className="p-5 border-b border-gray-200">
-          <h1 className="text-xl font-bold text-blue-900">🦶 Vida de Colores</h1>
-          <p className="text-xs text-gray-500 mt-1">Panel Administrativo</p>
+      <aside className="w-60 bg-marfil border-r border-arena flex flex-col shrink-0">
+        <div className="p-5 border-b border-arena">
+          <h1 className="font-display italic text-2xl text-tinta font-semibold">
+            Vida de Colores
+          </h1>
+          <p className="text-[11px] tracking-[0.2em] uppercase text-rosa font-bold mt-1">
+            Panel administrativo
+          </p>
         </div>
 
         <nav className="flex-1 p-3 space-y-1">
@@ -113,10 +139,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block px-4 py-2.5 rounded-lg font-medium transition ${
+                className={`block px-4 py-2.5 rounded-full font-semibold transition ${
                   active
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-700 hover:bg-blue-50'
+                    ? 'bg-tinta text-marfil'
+                    : 'text-tinta-suave hover:bg-rosa-palo/40 hover:text-tinta'
                 }`}
               >
                 {item.label}
@@ -125,18 +151,18 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           })}
         </nav>
 
-        <div className="p-3 border-t border-gray-200">
+        <div className="p-3 border-t border-arena">
           <Link
             href="/"
-            className="block px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg mb-1"
+            className="block px-4 py-2 text-sm text-tinta-suave hover:bg-arena/50 rounded-full mb-1 transition"
           >
             🌐 Ver sitio público
           </Link>
           <button
             onClick={handleLogout}
-            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg"
+            className="w-full text-left px-4 py-2 text-sm text-rosa font-semibold hover:bg-rosa-palo/40 rounded-full transition"
           >
-            🚪 Cerrar Sesión
+            🚪 Cerrar sesión
           </button>
         </div>
       </aside>

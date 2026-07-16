@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { CLINIC } from '@/lib/clinicConfig'
+import CasosCarousel from '@/components/CasosCarousel'
 
 const SERVICIOS = [
   {
@@ -176,6 +177,9 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      {/* ================= CASOS REALES (carrusel) ================= */}
+      <CasosCarousel />
 
       {/* ================= CÓMO FUNCIONA ================= */}
       <section id="como-funciona" className="bg-arena/50">
