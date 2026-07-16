@@ -169,8 +169,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </div>
       </aside>
 
-      {/* Contenido */}
-      <main className="flex-1 p-6 overflow-x-auto">{children}</main>
+      {/* Contenido (sin overflow aquí: rompería los encabezados sticky;
+          las tablas anchas tienen su propio scroll interno) */}
+      <main className="flex-1 min-w-0 p-6">{children}</main>
 
       {/* Notificaciones elegantes */}
       <Toaster />
