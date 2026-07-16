@@ -10,7 +10,7 @@ import {
   getBlockouts,
 } from '@/lib/supabase'
 import { SelectField, TextField, TextAreaField } from '@/components/fields'
-import { CLINIC } from '@/lib/clinicConfig'
+import { CLINIC, getClinicInfo, type ClinicInfo } from '@/lib/clinicConfig'
 import { showToast } from '@/components/toast'
 
 // Edad a partir de la fecha de nacimiento
@@ -43,6 +43,7 @@ export default function DocumentsTab({ patient }: { patient: any }) {
   const [form, setForm] = useState<any>({ tipo: 'receta' })
   const [activeDays, setActiveDays] = useState<number[]>([])
   const [blockedDates, setBlockedDates] = useState<string[]>([])
+  const [clinic, setClinic] = useState<ClinicInfo>(CLINIC)
 
   const load = useCallback(() => {
     getDocuments(patient.id)
@@ -53,6 +54,7 @@ export default function DocumentsTab({ patient }: { patient: any }) {
 
   useEffect(() => {
     load()
+    getClinicInfo().then(setClinic).catch(() => {})
     // Cargar días de atención y bloqueos (para validar próximo control)
     Promise.all([getAvailability(), getBlockouts()])
       .then(([avail, blocks]) => {
@@ -151,9 +153,9 @@ export default function DocumentsTab({ patient }: { patient: any }) {
       const tipoLabel = doc.tipo === 'receta' ? 'receta' : 'indicaciones de tratamiento'
       const message =
         `Hola ${patient.name} 👋\n\n` +
-        `Te comparto tu ${tipoLabel} de ${CLINIC.brand}:\n${url}\n\n` +
+        `Te comparto tu ${tipoLabel} de ${clinic.brand}:\n${url}\n\n` +
         `El enlace estará disponible por 30 días.\n\n` +
-        `${CLINIC.professional}\n${CLINIC.instagram}`
+        `${clinic.professional}\n${clinic.instagram}`
       const phone = waPhone(patient.phone)
       window.open(
         `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,

@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { CLINIC } from '@/lib/clinicConfig'
 import CasosCarousel from '@/components/CasosCarousel'
+import ContactButtons from '@/components/ContactButtons'
 
 const SERVICIOS = [
   {
@@ -229,28 +230,7 @@ export default function Home() {
           </h2>
           <p className="mt-3 text-foreground/70">¿Dudas o consultas? Escríbenos directamente.</p>
 
-          <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm font-semibold">
-            <a
-              href={`https://wa.me/${CLINIC.phone.replace(/\D/g, '')}`}
-              target="_blank"
-              className="bg-marfil border border-arena rounded-full px-6 py-3 text-tinta hover:shadow-md transition"
-            >
-              💬 WhatsApp {CLINIC.phone}
-            </a>
-            <a
-              href={`https://instagram.com/${CLINIC.instagram.replace('@', '')}`}
-              target="_blank"
-              className="bg-marfil border border-arena rounded-full px-6 py-3 text-tinta hover:shadow-md transition"
-            >
-              📷 {CLINIC.instagram}
-            </a>
-            <a
-              href={`mailto:${CLINIC.email}`}
-              className="bg-marfil border border-arena rounded-full px-6 py-3 text-tinta hover:shadow-md transition"
-            >
-              ✉️ {CLINIC.email}
-            </a>
-          </div>
+          <ContactButtons />
 
           {/* Flores de la marca */}
           <div className="mt-12 relative">

@@ -2,7 +2,7 @@
 // Se importa dinámicamente (solo en el navegador, al hacer click)
 
 import { Document, Page, Text, View, StyleSheet, Image, pdf } from '@react-pdf/renderer'
-import { CLINIC } from './clinicConfig'
+import { getClinicInfo, type ClinicInfo } from './clinicConfig'
 
 const styles = StyleSheet.create({
   page: {
@@ -96,16 +96,16 @@ function Field({ label, value }: { label: string; value?: string }) {
   )
 }
 
-function ClinicDocument({ data, origin }: { data: PdfDocumentData; origin: string }) {
+function ClinicDocument({ data, origin, info }: { data: PdfDocumentData; origin: string; info: ClinicInfo }) {
   return (
     <Document
       title={data.tipo === 'receta' ? 'Receta' : 'Indicaciones'}
-      author={CLINIC.professional}
+      author={info.professional}
     >
       <Page size="LETTER" style={styles.page}>
         {/* Logo Vida de Colores */}
         <Image style={styles.logo} src={`${origin}/pdf-assets/logo.png`} />
-        <Text style={styles.subtitle}>{CLINIC.subtitle}</Text>
+        <Text style={styles.subtitle}>{info.subtitle}</Text>
 
         {/* Campos según tipo de documento */}
         {data.tipo === 'receta' ? (
@@ -137,13 +137,13 @@ function ClinicDocument({ data, origin }: { data: PdfDocumentData; origin: strin
               src={`${origin}/pdf-assets/firma.png`}
               style={{ width: 120, alignSelf: 'center', marginBottom: -12 }}
             />
-            <Text style={styles.footerName}>{CLINIC.professional}</Text>
-            <Text style={styles.footerRut}>Rut: {CLINIC.rut}</Text>
+            <Text style={styles.footerName}>{info.professional}</Text>
+            <Text style={styles.footerRut}>Rut: {info.rut}</Text>
           </View>
         </View>
 
         <Text style={styles.footerContact}>
-          {CLINIC.instagram}  {CLINIC.phone}  {CLINIC.email}
+          {info.instagram}  {info.phone}  {info.email}
         </Text>
       </Page>
     </Document>
@@ -153,5 +153,6 @@ function ClinicDocument({ data, origin }: { data: PdfDocumentData; origin: strin
 export async function generateDocumentPdf(data: PdfDocumentData): Promise<Blob> {
   // origin = URL del sitio (funciona en localhost y en producción)
   const origin = window.location.origin
-  return await pdf(<ClinicDocument data={data} origin={origin} />).toBlob()
+  const info = await getClinicInfo()
+  return await pdf(<ClinicDocument data={data} origin={origin} info={info} />).toBlob()
 }

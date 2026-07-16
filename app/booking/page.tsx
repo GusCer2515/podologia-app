@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { bookAppointment } from '@/lib/supabase'
 import { getAvailableSlots } from '@/lib/slots'
-import { CLINIC } from '@/lib/clinicConfig'
+import { CLINIC, getClinicInfo, type ClinicInfo } from '@/lib/clinicConfig'
 
 type ModalState =
   | { type: 'success'; date: string; time: string; name: string }
@@ -16,6 +16,11 @@ export default function BookingPage() {
   const [slots, setSlots] = useState<string[]>([])
   const [dayMessage, setDayMessage] = useState('')
   const [modal, setModal] = useState<ModalState>(null)
+  const [clinic, setClinic] = useState<ClinicInfo>(CLINIC)
+
+  useEffect(() => {
+    getClinicInfo().then(setClinic).catch(() => {})
+  }, [])
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -124,8 +129,8 @@ export default function BookingPage() {
   const waRespaldo = (m: { date: string; time: string; name: string }) => {
     const msg =
       `Hola 👋 Soy ${m.name}.\n` +
-      `Confirmo mi hora agendada en ${CLINIC.brand} para el ${fmtFecha(m.date)} a las ${m.time} hrs. ✅`
-    return `https://wa.me/${CLINIC.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`
+      `Confirmo mi hora agendada en ${clinic.brand} para el ${fmtFecha(m.date)} a las ${m.time} hrs. ✅`
+    return `https://wa.me/${clinic.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`
   }
 
   return (

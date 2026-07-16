@@ -15,6 +15,7 @@ import {
   saveSetting,
 } from '@/lib/supabase'
 import { showToast } from '@/components/toast'
+import { CLINIC, getClinicInfo, clearClinicInfoCache, type ClinicInfo } from '@/lib/clinicConfig'
 
 // day_of_week: 0=Domingo ... 6=Sábado (orden visual Lun→Dom)
 const DIAS = [
@@ -239,6 +240,9 @@ export default function SettingsPage() {
           SQL Editor de Supabase para activar Convenios y Valores.
         </div>
       )}
+
+      {/* ================= DATOS DE CONTACTO ================= */}
+      <ContactosSection />
 
       {/* ================= HORARIOS ================= */}
       <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
@@ -498,6 +502,103 @@ export default function SettingsPage() {
         )}
       </section>
     </div>
+  )
+}
+
+// Sección de datos de contacto del negocio (sitio, WhatsApp, PDFs)
+function ContactosSection() {
+  const [info, setInfo] = useState<ClinicInfo>(CLINIC)
+  const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    getClinicInfo()
+      .then(setInfo)
+      .finally(() => setLoaded(true))
+  }, [])
+
+  const set = (key: keyof ClinicInfo) => (e: any) =>
+    setInfo((prev) => ({ ...prev, [key]: e.target.value }))
+
+  const guardar = async () => {
+    if (!info.phone.trim() || !info.email.trim()) {
+      showToast('Teléfono y correo son obligatorios', 'error')
+      return
+    }
+    setSaving(true)
+    try {
+      const { professional, rut, instagram, phone, email } = info
+      await saveSetting(
+        'clinic_info',
+        JSON.stringify({
+          professional: professional.trim(),
+          rut: rut.trim(),
+          instagram: instagram.trim().startsWith('@') ? instagram.trim() : `@${instagram.trim()}`,
+          phone: phone.trim(),
+          email: email.trim().toLowerCase(),
+        })
+      )
+      clearClinicInfoCache()
+      showToast('Datos de contacto actualizados')
+    } catch (err) {
+      console.error(err)
+      showToast('Error guardando los datos (¿ejecutaste fase13?)', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputClass =
+    'w-full px-3 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave'
+
+  return (
+    <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
+      <h2 className="font-display text-2xl text-tinta font-semibold mb-1">📞 Datos del negocio</h2>
+      <p className="text-sm text-gray-500 mb-5">
+        Estos datos se muestran en el sitio público, los mensajes de WhatsApp y los PDFs de
+        recetas e indicaciones.
+      </p>
+
+      {!loaded ? (
+        <p className="text-sm text-gray-400">Cargando...</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="text-xs font-semibold text-gray-600">
+              Nombre de la profesional
+              <input value={info.professional} onChange={set('professional')} className={`mt-1 ${inputClass}`} />
+            </label>
+            <label className="text-xs font-semibold text-gray-600">
+              RUT de la profesional
+              <input value={info.rut} onChange={set('rut')} className={`mt-1 ${inputClass}`} />
+            </label>
+            <label className="text-xs font-semibold text-gray-600">
+              Teléfono / WhatsApp (con +56)
+              <input value={info.phone} onChange={set('phone')} className={`mt-1 ${inputClass}`} />
+            </label>
+            <label className="text-xs font-semibold text-gray-600">
+              Correo del negocio
+              <input value={info.email} onChange={set('email')} className={`mt-1 ${inputClass}`} />
+            </label>
+            <label className="text-xs font-semibold text-gray-600">
+              Instagram (con @)
+              <input value={info.instagram} onChange={set('instagram')} className={`mt-1 ${inputClass}`} />
+            </label>
+          </div>
+
+          <button
+            onClick={guardar}
+            disabled={saving}
+            className="mt-5 bg-tinta text-marfil px-8 py-2.5 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50"
+          >
+            {saving ? 'Guardando...' : '💾 Guardar datos de contacto'}
+          </button>
+          <p className="text-xs text-gray-400 mt-2">
+            Los PDFs ya emitidos no cambian (quedan como se firmaron); los nuevos usarán estos datos.
+          </p>
+        </>
+      )}
+    </section>
   )
 }
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { CLINIC } from '@/lib/clinicConfig'
+import { getClinicInfo } from '@/lib/clinicConfig'
 
 // ============================================================
 // Envía correos de confirmación al reservar una cita:
@@ -8,7 +8,7 @@ import { CLINIC } from '@/lib/clinicConfig'
 // Usa SendGrid — la API key vive SOLO en el servidor
 // ============================================================
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, subject: string, html: string, fromName: string) {
   const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: {
@@ -19,7 +19,7 @@ async function sendEmail(to: string, subject: string, html: string) {
       personalizations: [{ to: [{ email: to }] }],
       from: {
         email: process.env.SENDGRID_FROM_EMAIL,
-        name: CLINIC.brand,
+        name: fromName,
       },
       subject,
       content: [{ type: 'text/html', value: html }],
@@ -31,20 +31,20 @@ async function sendEmail(to: string, subject: string, html: string) {
   }
 }
 
-function emailBase(contenido: string) {
+function emailBase(info: any, contenido: string) {
   return `
   <div style="background:#faf6f0;padding:32px 16px;font-family:Georgia,serif;color:#43414a">
     <div style="max-width:520px;margin:0 auto;background:#fffdf9;border-radius:20px;padding:36px;border:1px solid #f1e9de">
       <h1 style="font-style:italic;color:#33506e;text-align:center;margin:0 0 4px;font-weight:600">
-        ${CLINIC.brand}
+        ${info.brand}
       </h1>
       <p style="text-align:center;color:#c96f85;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin:0 0 28px">
-        ${CLINIC.subtitle}
+        ${info.subtitle}
       </p>
       ${contenido}
       <hr style="border:none;border-top:1px solid #f1e9de;margin:28px 0 16px" />
       <p style="text-align:center;font-size:12px;color:#999;margin:0">
-        ${CLINIC.professional} · ${CLINIC.instagram} · ${CLINIC.phone}
+        ${info.professional} · ${info.instagram} · ${info.phone}
       </p>
     </div>
   </div>`
@@ -85,6 +85,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, reason: 'email_not_configured' })
     }
 
+    // Datos de contacto vigentes (editables desde el panel)
+    const info = await getClinicInfo()
+
     const fecha = new Date(date + 'T00:00:00').toLocaleDateString('es-CL', {
       weekday: 'long',
       day: 'numeric',
@@ -95,24 +98,25 @@ export async function POST(req: Request) {
     // 1. Correo al paciente
     await sendEmail(
       email,
-      `✅ Tu hora está reservada — ${CLINIC.brand}`,
-      emailBase(`
+      `✅ Tu hora está reservada — ${info.brand}`,
+      emailBase(info, `
         <p style="font-size:16px">Hola <strong>${name}</strong> 👋</p>
         <p style="font-size:16px">Tu hora quedó <strong style="color:#33506e">reservada</strong>:</p>
         <div style="background:#f3dee2;border-radius:14px;padding:18px 22px;margin:18px 0">
           <p style="margin:0;font-size:16px">📅 <strong>${fecha}</strong></p>
           <p style="margin:6px 0 0;font-size:16px">🕐 <strong>${time} hrs</strong></p>
         </div>
-        <p style="font-size:14px;color:#666">Si necesitas cambiar o cancelar tu hora, contáctanos por WhatsApp al ${CLINIC.phone}.</p>
+        <p style="font-size:14px;color:#666">Si necesitas cambiar o cancelar tu hora, contáctanos por WhatsApp al ${info.phone}.</p>
         <p style="font-size:16px">¡Te esperamos! 🌸</p>
-      `)
+      `),
+      info.brand
     )
 
     // 2. Aviso a la clínica
     await sendEmail(
-      CLINIC.email,
+      info.email,
       `📅 Nueva reserva: ${name} — ${date} ${time}`,
-      emailBase(`
+      emailBase(info, `
         <p style="font-size:16px"><strong>Nueva hora reservada</strong></p>
         <div style="background:#f1e9de;border-radius:14px;padding:18px 22px;margin:18px 0;font-size:15px">
           <p style="margin:0">👤 <strong>${name}</strong></p>
@@ -121,7 +125,8 @@ export async function POST(req: Request) {
           <p style="margin:6px 0 0">✉️ ${email}</p>
         </div>
         <p style="font-size:14px;color:#666">Revisa el detalle en tu panel administrativo.</p>
-      `)
+      `),
+      info.brand
     )
 
     return NextResponse.json({ ok: true })
