@@ -125,6 +125,12 @@ export async function updatePatient(id: string, fields: any) {
   if (error) throw error
 }
 
+export async function deletePatient(id: string) {
+  // Elimina también citas, ficha, atenciones y documentos (cascada en BD)
+  const { error } = await supabase.from('patients').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function getPatientAppointments(patientId: string) {
   const { data, error } = await supabase
     .from('appointments')
@@ -327,10 +333,22 @@ export async function getDocumentSignedUrl(path: string) {
 export async function getAppointmentsBetween(startIso: string, endIso: string) {
   const { data, error } = await supabase
     .from('appointments')
-    .select('*, patients(id, name, phone)')
+    .select('*, patients(id, name, phone, insurance)')
     .gte('appointment_date', startIso)
     .lt('appointment_date', endIso)
     .order('appointment_date', { ascending: true })
+
+  if (error) throw error
+  return data
+}
+
+export async function getAttentionsBetween(startDate: string, endDate: string) {
+  const { data, error } = await supabase
+    .from('attentions')
+    .select('*, patients(id, name, insurance)')
+    .gte('fecha', startDate)
+    .lte('fecha', endDate)
+    .order('fecha', { ascending: true })
 
   if (error) throw error
   return data

@@ -2,19 +2,42 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { getPatients } from '@/lib/supabase'
+import { getPatients, deletePatient } from '@/lib/supabase'
+import { showToast } from '@/components/toast'
 
 export default function PatientsPage() {
   const [patients, setPatients] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [deleteTarget, setDeleteTarget] = useState<any>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  useEffect(() => {
+  const load = () => {
     getPatients()
       .then((data) => setPatients(data || []))
       .catch(console.error)
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    load()
   }, [])
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await deletePatient(deleteTarget.id)
+      showToast(`Paciente ${deleteTarget.name} eliminado`)
+      setDeleteTarget(null)
+      load()
+    } catch (err) {
+      console.error(err)
+      showToast('Error eliminando el paciente', 'error')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const term = search.toLowerCase().trim()
   const filtered = patients.filter(
@@ -72,18 +95,59 @@ export default function PatientsPage() {
                       ? new Date(p.fecha_ingreso + 'T00:00:00').toLocaleDateString('es-CL')
                       : '—'}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
                     <Link
                       href={`/admin/patients/${p.id}`}
-                      className="text-tinta hover:text-rosa text-sm font-semibold"
+                      className="text-tinta hover:text-rosa text-sm font-semibold mr-4"
                     >
                       Ver ficha →
                     </Link>
+                    <button
+                      onClick={() => setDeleteTarget(p)}
+                      className="text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 text-sm transition"
+                      title="Eliminar paciente"
+                    >
+                      🗑
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal de confirmación de eliminación */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4">
+          <div className="bg-marfil rounded-3xl shadow-2xl border border-arena max-w-sm w-full p-8 text-center animate-fade-up">
+            <div className="w-16 h-16 mx-auto rounded-full bg-rosa-palo flex items-center justify-center text-3xl">
+              🗑
+            </div>
+            <h2 className="font-display text-2xl text-tinta font-medium mt-4">
+              ¿Eliminar a <span className="italic">{deleteTarget.name}</span>?
+            </h2>
+            <p className="mt-3 text-sm text-foreground/75 leading-relaxed">
+              Se eliminarán también sus <strong>citas, ficha clínica, atenciones y
+              documentos</strong>.
+              <br />
+              <strong className="text-rosa">Esta acción no se puede deshacer.</strong>
+            </p>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="mt-6 w-full bg-rosa text-marfil py-3 rounded-full font-bold hover:opacity-90 transition disabled:opacity-50"
+            >
+              {deleting ? 'Eliminando...' : 'Sí, eliminar paciente'}
+            </button>
+            <button
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+              className="mt-3 w-full py-3 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
     </div>
