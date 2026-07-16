@@ -129,10 +129,14 @@ function ClinicDocument({ data, origin }: { data: PdfDocumentData; origin: strin
 
         <View style={styles.spacer} />
 
-        {/* Pie: flores en las esquinas + nombre/rut centrado encima */}
+        {/* Pie: flores en las esquinas + firma sobre el nombre/rut */}
         <View style={styles.footerBanner}>
           <Image style={styles.footerFlowers} src={`${origin}/pdf-assets/flores-pie.png`} />
           <View style={styles.footerOverlay}>
+            <Image
+              src={`${origin}/pdf-assets/firma.png`}
+              style={{ width: 120, alignSelf: 'center', marginBottom: -12 }}
+            />
             <Text style={styles.footerName}>{CLINIC.professional}</Text>
             <Text style={styles.footerRut}>Rut: {CLINIC.rut}</Text>
           </View>
