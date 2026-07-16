@@ -432,13 +432,18 @@ export async function getAppointmentsBetween(startIso: string, endIso: string) {
 export async function getAttentionsBetween(startDate: string, endDate: string) {
   const { data, error } = await supabase
     .from('attentions')
-    .select('*, patients(id, name, insurance)')
+    .select('*, patients(id, name, rut, insurance)')
     .gte('fecha', startDate)
     .lte('fecha', endDate)
     .order('fecha', { ascending: true })
 
   if (error) throw error
   return data
+}
+
+export async function updateAttention(id: string, fields: any) {
+  const { error } = await supabase.from('attentions').update(fields).eq('id', id)
+  if (error) throw error
 }
 
 // El admin agenda directamente (el índice único de la BD evita duplicados)

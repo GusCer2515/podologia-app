@@ -7,6 +7,7 @@ import {
   getConvenios,
   getSetting,
 } from '@/lib/supabase'
+import Conciliacion from '@/components/Conciliacion'
 
 const fmtCLP = (n: number) =>
   new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(n)
@@ -222,17 +223,8 @@ export default function FinancePage() {
             </p>
           </section>
 
-          {/* ===== Conciliación bancaria (próxima fase) ===== */}
-          <section className="bg-arena/40 rounded-2xl border border-arena border-dashed p-6">
-            <h2 className="font-display text-2xl text-tinta font-semibold mb-2">
-              🏦 Conciliación con cartola bancaria
-            </h2>
-            <p className="text-sm text-gray-500">
-              Próxima fase: aquí podrás <strong>importar tu cartola del banco</strong> (como
-              tu planilla de junio) y cruzarla automáticamente contra las atenciones del mes
-              para identificar transferencias recibidas y generar las boletas del SII.
-            </p>
-          </section>
+          {/* ===== Conciliación bancaria ===== */}
+          <Conciliacion />
         </div>
       )}
     </div>
