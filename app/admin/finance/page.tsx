@@ -66,8 +66,13 @@ export default function FinancePage() {
   const ingresoReal = attentions.reduce((sum, a) => sum + valorAtencion(a), 0)
   const proyeccion = scheduled.reduce((sum, a) => sum + valueFor(a.patients?.insurance), 0)
 
-  // Desglose por convenio (atenciones realizadas)
+  // Desglose por convenio: SIEMPRE se muestran todos los convenios
+  // registrados + la fila PARTICULAR, aunque estén en cero
   const grupos: Record<string, { cantidad: number; total: number }> = {}
+  grupos['PARTICULAR (sin convenio)'] = { cantidad: 0, total: 0 }
+  for (const c of convenios) {
+    grupos[c.nombre] = { cantidad: 0, total: 0 }
+  }
   for (const a of attentions) {
     const key = a.patients?.insurance || 'PARTICULAR (sin convenio)'
     if (!grupos[key]) grupos[key] = { cantidad: 0, total: 0 }
@@ -125,7 +130,7 @@ export default function FinancePage() {
             <h2 className="font-display text-2xl text-tinta font-semibold mb-4">
               🤝 Ingresos por convenio
             </h2>
-            {Object.keys(grupos).length === 0 ? (
+            {attentions.length === 0 && convenios.length === 0 ? (
               <p className="text-sm text-gray-400">
                 No hay atenciones registradas este mes. Registra atenciones (con su valor) en la
                 ficha de cada paciente y aparecerán aquí.
