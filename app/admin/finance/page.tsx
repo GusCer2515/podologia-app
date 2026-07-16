@@ -67,15 +67,15 @@ export default function FinancePage() {
   const proyeccion = scheduled.reduce((sum, a) => sum + valueFor(a.patients?.insurance), 0)
 
   // Desglose por convenio: SIEMPRE se muestran todos los convenios
-  // registrados + la fila PARTICULAR, aunque estén en cero
-  const grupos: Record<string, { cantidad: number; total: number }> = {}
-  grupos['PARTICULAR (sin convenio)'] = { cantidad: 0, total: 0 }
+  // registrados + la fila PARTICULAR (con su valor unitario configurado)
+  const grupos: Record<string, { valor: number; cantidad: number; total: number }> = {}
+  grupos['PARTICULAR (sin convenio)'] = { valor: precioParticular, cantidad: 0, total: 0 }
   for (const c of convenios) {
-    grupos[c.nombre] = { cantidad: 0, total: 0 }
+    grupos[c.nombre] = { valor: c.valor ?? precioParticular, cantidad: 0, total: 0 }
   }
   for (const a of attentions) {
     const key = a.patients?.insurance || 'PARTICULAR (sin convenio)'
-    if (!grupos[key]) grupos[key] = { cantidad: 0, total: 0 }
+    if (!grupos[key]) grupos[key] = { valor: valueFor(a.patients?.insurance), cantidad: 0, total: 0 }
     grupos[key].cantidad++
     grupos[key].total += valorAtencion(a)
   }
@@ -141,8 +141,9 @@ export default function FinancePage() {
                   <thead className="bg-arena/50">
                     <tr>
                       <th className="px-4 py-2.5 text-left font-bold text-tinta">Convenio</th>
+                      <th className="px-4 py-2.5 text-right font-bold text-tinta">Valor atención</th>
                       <th className="px-4 py-2.5 text-right font-bold text-tinta">Atenciones</th>
-                      <th className="px-4 py-2.5 text-right font-bold text-tinta">Total</th>
+                      <th className="px-4 py-2.5 text-right font-bold text-tinta">Total del mes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -151,6 +152,7 @@ export default function FinancePage() {
                       .map(([nombre, g]) => (
                         <tr key={nombre} className="border-t border-arena/60">
                           <td className="px-4 py-2.5 font-semibold text-tinta">{nombre}</td>
+                          <td className="px-4 py-2.5 text-right text-tinta">{fmtCLP(g.valor)}</td>
                           <td className="px-4 py-2.5 text-right">{g.cantidad}</td>
                           <td className="px-4 py-2.5 text-right font-bold text-salvia">
                             {fmtCLP(g.total)}
@@ -159,6 +161,7 @@ export default function FinancePage() {
                       ))}
                     <tr className="border-t-2 border-tinta/20 bg-arena/30">
                       <td className="px-4 py-2.5 font-bold text-tinta">TOTAL</td>
+                      <td className="px-4 py-2.5"></td>
                       <td className="px-4 py-2.5 text-right font-bold">{attentions.length}</td>
                       <td className="px-4 py-2.5 text-right font-bold text-tinta">
                         {fmtCLP(ingresoReal)}
