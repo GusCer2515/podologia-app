@@ -7,6 +7,19 @@ import { showToast } from '@/components/toast'
 
 const normRut = (s: any) => String(s ?? '').replace(/[^0-9kK]/g, '').toUpperCase()
 
+// Avatar con iniciales y color según el nombre
+const AVATAR_COLORS = ['bg-tinta', 'bg-rosa', 'bg-salvia', 'bg-[#d9a441]', 'bg-tinta-suave']
+const initials = (name?: string) =>
+  String(name ?? '?')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+const colorFor = (name?: string) =>
+  AVATAR_COLORS[(String(name ?? 'A').charCodeAt(0) + String(name ?? 'A').length) % AVATAR_COLORS.length]
+
 const inputClass =
   'w-full px-3 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave'
 
@@ -123,15 +136,46 @@ export default function PatientsPage() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h1 className="font-display text-3xl text-tinta font-medium">Pacientes</h1>
-        <div className="flex items-center gap-3">
-          <p className="text-sm text-gray-500">{patients.length} pacientes registrados</p>
-          <button
-            onClick={() => setShowNew(true)}
-            className="bg-tinta text-marfil px-5 py-2 rounded-full font-bold hover:bg-tinta-suave transition"
-          >
-            + Nuevo paciente
-          </button>
+        <h1 className="font-display text-3xl text-tinta font-medium">
+          Pacientes <span className="italic">de la consulta</span>
+        </h1>
+        <button
+          onClick={() => setShowNew(true)}
+          className="bg-tinta text-marfil px-5 py-2 rounded-full font-bold hover:bg-tinta-suave transition shadow-lg shadow-tinta/20"
+        >
+          + Nuevo paciente
+        </button>
+      </div>
+
+      {/* Tarjetas resumen */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
+          <p className="text-sm text-gray-500">👥 Total pacientes</p>
+          <p className="text-3xl font-bold text-tinta">{patients.length}</p>
+        </div>
+        <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
+          <p className="text-sm text-gray-500">🤝 Con convenio</p>
+          <p className="text-3xl font-bold text-rosa">
+            {patients.filter((p) => p.insurance).length}
+          </p>
+        </div>
+        <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
+          <p className="text-sm text-gray-500">💵 Particulares</p>
+          <p className="text-3xl font-bold text-salvia">
+            {patients.filter((p) => !p.insurance).length}
+          </p>
+        </div>
+        <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
+          <p className="text-sm text-gray-500">🌱 Nuevos este mes</p>
+          <p className="text-3xl font-bold text-tinta-suave">
+            {
+              patients.filter((p) =>
+                String(p.fecha_ingreso ?? '').startsWith(
+                  new Date().toISOString().substring(0, 7)
+                )
+              ).length
+            }
+          </p>
         </div>
       </div>
 
@@ -168,30 +212,49 @@ export default function PatientsPage() {
             : 'Aún no hay pacientes registrados'}
         </p>
       ) : (
-        <div className="bg-marfil rounded-2xl border border-arena shadow-sm overflow-x-auto">
+        <div className="bg-marfil rounded-2xl border border-arena shadow-sm overflow-x-auto animate-fade-up">
           <table className="w-full">
             <thead className="bg-arena/50">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Nombre</th>
-                <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">RUT</th>
-                <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Teléfono</th>
-                <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Email</th>
-                <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Convenio</th>
-                <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Ingreso</th>
+                <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Paciente</th>
+                <th className="px-4 py-3 text-left text-sm font-bold text-tinta">RUT</th>
+                <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Teléfono</th>
+                <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Convenio</th>
+                <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Ingreso</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((p) => (
-                <tr key={p.id} className="border-t border-gray-100 hover:bg-rosa-palo/30">
-                  <td className="px-4 py-3 text-sm font-semibold text-gray-800">{p.name}</td>
+                <tr
+                  key={p.id}
+                  className="border-t border-arena/60 hover:bg-rosa-palo/25 transition-colors group"
+                >
+                  <td className="px-4 py-3">
+                    <Link href={`/admin/patients/${p.id}`} className="flex items-center gap-3">
+                      <span
+                        className={`w-10 h-10 rounded-full ${colorFor(p.name)} text-marfil flex items-center justify-center text-sm font-bold shrink-0 shadow-sm`}
+                      >
+                        {initials(p.name)}
+                      </span>
+                      <span>
+                        <span className="block text-sm font-bold text-tinta group-hover:text-rosa transition">
+                          {p.name}
+                        </span>
+                        <span className="block text-xs text-gray-400">{p.email}</span>
+                      </span>
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{p.rut || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{p.phone || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{p.email}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {p.phone ? `📞 ${p.phone}` : '—'}
+                  </td>
                   <td className="px-4 py-3 text-sm">
                     <span
-                      className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        p.insurance ? 'bg-rosa-palo/70 text-tinta' : 'bg-arena/70 text-gray-600'
+                      className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        p.insurance
+                          ? 'bg-rosa-palo/70 text-tinta border border-rosa/30'
+                          : 'bg-arena/70 text-gray-600 border border-arena'
                       }`}
                     >
                       {p.insurance || 'Particular'}
@@ -205,13 +268,13 @@ export default function PatientsPage() {
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <Link
                       href={`/admin/patients/${p.id}`}
-                      className="text-tinta hover:text-rosa text-sm font-semibold mr-4"
+                      className="inline-block bg-tinta text-marfil text-xs font-bold px-4 py-1.5 rounded-full hover:bg-tinta-suave transition mr-2"
                     >
                       Ver ficha →
                     </Link>
                     <button
                       onClick={() => setDeleteTarget(p)}
-                      className="text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 text-sm transition"
+                      className="text-rosa/60 hover:text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 text-sm transition"
                       title="Eliminar paciente"
                     >
                       🗑
