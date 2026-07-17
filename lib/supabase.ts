@@ -483,7 +483,7 @@ export async function adminCreateAppointment(
 export async function getRecentWebBookings(limit = 20) {
   const { data, error } = await supabase
     .from('appointments')
-    .select('id, appointment_date, created_at, status, patients(name, phone)')
+    .select('id, appointment_date, created_at, status, patients(id, name, phone)')
     .eq('origin', 'web')
     .order('created_at', { ascending: false })
     .limit(limit)

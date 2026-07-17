@@ -3,14 +3,26 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { getRecentWebBookings } from '@/lib/supabase'
+import { CLINIC, getClinicInfo, type ClinicInfo } from '@/lib/clinicConfig'
 
 const SEEN_KEY = 'vdc_notif_last_seen'
+
+// Normaliza teléfono chileno a formato wa.me (56XXXXXXXXX)
+function waPhone(phone?: string): string {
+  if (!phone) return ''
+  const d = phone.replace(/\D/g, '')
+  if (d.startsWith('56')) return d
+  if (d.length === 9 && d.startsWith('9')) return '56' + d
+  if (d.length === 8) return '569' + d
+  return d
+}
 
 // Campana de avisos de reservas hechas desde el sitio web público
 export default function NotificationBell() {
   const [items, setItems] = useState<any[]>([])
   const [open, setOpen] = useState(false)
   const [lastSeen, setLastSeen] = useState<number>(0)
+  const [clinic, setClinic] = useState<ClinicInfo>(CLINIC)
   const ref = useRef<HTMLDivElement>(null)
 
   const load = () => {
@@ -22,10 +34,21 @@ export default function NotificationBell() {
   useEffect(() => {
     setLastSeen(Number(localStorage.getItem(SEEN_KEY) || 0))
     load()
+    getClinicInfo().then(setClinic).catch(() => {})
     // Refrescar cada 60s para captar reservas nuevas
     const timer = setInterval(load, 60000)
     return () => clearInterval(timer)
   }, [])
+
+  // Link para que la CLÍNICA le escriba al paciente
+  const waPaciente = (i: any) => {
+    const fecha = new Date(i.appointment_date).toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
+    const hora = String(i.appointment_date).substring(11, 16)
+    const msg =
+      `Hola ${i.patients?.name?.split(' ')[0] || ''} 👋 Te saludamos de ${clinic.brand}.\n` +
+      `Confirmamos tu hora para el ${fecha} a las ${hora} hrs. ¡Te esperamos! 🌸`
+    return `https://wa.me/${waPhone(i.patients?.phone)}?text=${encodeURIComponent(msg)}`
+  }
 
   // Cerrar al hacer click fuera
   useEffect(() => {
@@ -87,11 +110,9 @@ export default function NotificationBell() {
                 const esNuevo = new Date(i.created_at).getTime() > lastSeen
                 const cancelada = i.status === 'cancelled'
                 return (
-                  <Link
+                  <div
                     key={i.id}
-                    href="/admin"
-                    onClick={() => setOpen(false)}
-                    className={`block px-4 py-3 border-b border-arena/60 hover:bg-rosa-palo/20 transition ${esNuevo ? 'bg-rosa-palo/15' : ''}`}
+                    className={`px-4 py-3 border-b border-arena/60 ${esNuevo ? 'bg-rosa-palo/15' : ''}`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className={`text-sm font-bold text-tinta ${cancelada ? 'line-through text-gray-400' : ''}`}>
@@ -105,7 +126,26 @@ export default function NotificationBell() {
                       {cancelada && ' · cancelada'}
                     </p>
                     <p className="text-[11px] text-gray-400">Reservó {fechaRel(i.created_at)}</p>
-                  </Link>
+                    <div className="flex gap-2 mt-2">
+                      {i.patients?.phone && !cancelada && (
+                        <a
+                          href={waPaciente(i)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-salvia text-marfil px-3 py-1 rounded-full text-[11px] font-bold hover:opacity-90 transition"
+                        >
+                          💬 Escribir al paciente
+                        </a>
+                      )}
+                      <Link
+                        href={`/admin/patients/${i.patients?.id ?? ''}`}
+                        onClick={() => setOpen(false)}
+                        className="bg-arena text-tinta px-3 py-1 rounded-full text-[11px] font-bold hover:bg-arena/70 transition"
+                      >
+                        Ver ficha
+                      </Link>
+                    </div>
+                  </div>
                 )
               })
             )}
