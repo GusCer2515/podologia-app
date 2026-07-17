@@ -15,6 +15,8 @@ export const CLINIC = {
   instagram: '@vidadecolores_podologia',
   phone: '+56944187670',
   email: 'podologiavidadecolores@gmail.com',
+  // Correo donde llegan los avisos de nuevas reservas (vacío = usa email)
+  notifyEmail: '',
 }
 
 export type ClinicInfo = typeof CLINIC

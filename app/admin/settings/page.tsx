@@ -570,6 +570,7 @@ function ContactosSection() {
           instagram: instagram.trim().startsWith('@') ? instagram.trim() : `@${instagram.trim()}`,
           phone: phone.trim(),
           email: email.trim().toLowerCase(),
+          notifyEmail: ((info as any).notifyEmail || '').trim().toLowerCase(),
         })
       )
       clearClinicInfoCache()
@@ -611,12 +612,21 @@ function ContactosSection() {
               <input value={info.phone} onChange={set('phone')} className={`mt-1 ${inputClass}`} />
             </label>
             <label className="text-xs font-semibold text-gray-600">
-              Correo del negocio
+              Correo del negocio (público)
               <input value={info.email} onChange={set('email')} className={`mt-1 ${inputClass}`} />
             </label>
             <label className="text-xs font-semibold text-gray-600">
               Instagram (con @)
               <input value={info.instagram} onChange={set('instagram')} className={`mt-1 ${inputClass}`} />
+            </label>
+            <label className="text-xs font-semibold text-gray-600 sm:col-span-2">
+              📬 Correo para avisos de reserva (donde llegan las notificaciones de nuevas horas)
+              <input
+                value={(info as any).notifyEmail || ''}
+                onChange={set('notifyEmail' as any)}
+                placeholder="Si lo dejas vacío, se usa el correo del negocio"
+                className={`mt-1 ${inputClass}`}
+              />
             </label>
           </div>
 

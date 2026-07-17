@@ -89,7 +89,12 @@ export default function PatientsPage() {
     const rutNuevo = normRut(form.rut)
     const existente = patients.find((p) => p.rut && normRut(p.rut) === rutNuevo)
     if (existente) {
-      showToast(`Ese RUT ya pertenece a ${existente.name} — abre su ficha`, 'error')
+      showToast(`Ese RUT ya pertenece a ${existente.name}. Abre su ficha existente.`, 'error')
+      return
+    }
+    // Email duplicado
+    if (patients.some((p) => p.email?.toLowerCase() === form.email.trim().toLowerCase())) {
+      showToast('Ese email ya está registrado en otro paciente', 'error')
       return
     }
     setSavingNew(true)
@@ -111,7 +116,7 @@ export default function PatientsPage() {
     } catch (err: any) {
       console.error(err)
       showToast(
-        err?.code === '23505' ? 'Ese email ya está registrado en otro paciente' : 'Error creando el paciente',
+        err?.code === '23505' ? 'Ya existe un paciente con ese RUT o email' : 'Error creando el paciente',
         'error'
       )
     } finally {
@@ -301,16 +306,29 @@ export default function PatientsPage() {
                 <input value={form.name} onChange={set('name')} autoComplete="off" className={`mt-1 ${inputClass}`} />
               </label>
               <label className="text-xs font-semibold text-gray-600">
-                RUT * (ej: 12345678-9)
-                <input value={form.rut} onChange={set('rut')} autoComplete="off" className={`mt-1 ${inputClass}`} />
+                RUT *
+                <input value={form.rut} onChange={set('rut')} autoComplete="off" placeholder="Ej: 12345678-9 (con guion, sin puntos)" className={`mt-1 ${inputClass}`} />
+                {(() => {
+                  const dup = form.rut && normRut(form.rut).length >= 7
+                    ? patients.find((p) => p.rut && normRut(p.rut) === normRut(form.rut))
+                    : null
+                  return dup ? (
+                    <span className="block mt-1 text-[11px] text-rosa font-semibold">
+                      ⚠️ Ya existe:{' '}
+                      <Link href={`/admin/patients/${dup.id}`} className="underline hover:text-tinta">
+                        abrir ficha de {dup.name}
+                      </Link>
+                    </span>
+                  ) : null
+                })()}
               </label>
               <label className="text-xs font-semibold text-gray-600">
                 Teléfono
-                <input value={form.phone} onChange={set('phone')} autoComplete="off" className={`mt-1 ${inputClass}`} />
+                <input value={form.phone} onChange={set('phone')} autoComplete="off" placeholder="Ej: +56 9 1234 5678" className={`mt-1 ${inputClass}`} />
               </label>
               <label className="text-xs font-semibold text-gray-600 sm:col-span-2">
                 Email *
-                <input type="email" value={form.email} onChange={set('email')} autoComplete="off" className={`mt-1 ${inputClass}`} />
+                <input type="email" value={form.email} onChange={set('email')} autoComplete="off" placeholder="Ej: nombre@gmail.com" className={`mt-1 ${inputClass}`} />
               </label>
               <label className="text-xs font-semibold text-gray-600">
                 Fecha de nacimiento

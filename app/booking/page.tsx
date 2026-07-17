@@ -233,8 +233,19 @@ export default function BookingPage() {
                     Es tu primera vez 👋 Cuéntanos tus datos para tu ficha.
                   </p>
                   <input type="text" name="name" placeholder="Nombre completo" value={formData.name} onChange={handleChange} required className={inputClass} />
-                  <input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleChange} required className={inputClass} />
-                  <input type="tel" name="phone" placeholder="Teléfono" value={formData.phone} onChange={handleChange} required className={inputClass} />
+                  <input type="email" name="email" placeholder="Email (ej: nombre@gmail.com)" value={formData.email} onChange={handleChange} required className={inputClass} />
+                  <div>
+                    <input
+                      type="tel"
+                      name="phone"
+                      placeholder="Ej: +56 9 1234 5678"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      required
+                      className={inputClass}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">📱 Tu WhatsApp, así podemos contactarte por tu hora.</p>
+                  </div>
                 </>
               )}
 
@@ -296,7 +307,8 @@ export default function BookingPage() {
                   Te esperamos el <strong className="text-tinta">{fmtFecha(modal.date)}</strong><br />a las <strong className="text-tinta">{modal.time} hrs</strong>.
                 </p>
                 <p className="mt-3 text-xs text-foreground/60 bg-arena/50 rounded-xl px-4 py-2">📧 Te enviamos la confirmación a tu correo.</p>
-                <a href={waRespaldo(modal)} target="_blank" rel="noopener noreferrer" className="mt-4 block w-full bg-salvia text-marfil py-3 rounded-full font-bold hover:opacity-90 transition">💬 Confirmar también por WhatsApp</a>
+                <a href={waRespaldo(modal)} target="_blank" rel="noopener noreferrer" className="mt-4 block w-full bg-salvia text-marfil py-3 rounded-full font-bold hover:opacity-90 transition">💬 Enviar confirmación a la clínica</a>
+                <p className="text-[11px] text-gray-400 mt-1.5">Abre WhatsApp con un mensaje listo para {clinic.brand}.</p>
                 <button onClick={() => setModal(null)} className="mt-3 w-full py-3 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition">Cerrar</button>
               </>
             ) : (

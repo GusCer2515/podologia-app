@@ -118,9 +118,9 @@ export async function POST(req: Request) {
       info.brand
     )
 
-    // 2. Aviso a la clínica
+    // 2. Aviso a la clínica (correo de avisos si está configurado, si no el del negocio)
     await sendEmail(
-      info.email,
+      (info as any).notifyEmail?.trim() || info.email,
       `📅 Nueva reserva: ${name} — ${date} ${time}`,
       emailBase(info, `
         <p style="font-size:16px"><strong>Nueva hora reservada</strong></p>

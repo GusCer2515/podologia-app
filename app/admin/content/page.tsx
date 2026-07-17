@@ -17,6 +17,58 @@ import { showToast } from '@/components/toast'
 const inputClass =
   'px-3 py-2 border border-arena rounded-xl bg-white text-sm w-full focus:outline-none focus:ring-2 focus:ring-tinta-suave'
 
+// Clasifica un link de video para saber si se puede INCRUSTAR en el sitio
+function classifyVideo(url?: string | null): { kind: string; id?: string; embeddable: boolean; label: string } {
+  if (!url || !url.trim()) return { kind: 'none', embeddable: false, label: '' }
+  const u = url.trim()
+  const yt = u.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/)
+  if (yt) return { kind: 'youtube', id: yt[1], embeddable: true, label: '✅ YouTube — se mostrará el video reproducible' }
+  const vm = u.match(/vimeo\.com\/(?:video\/)?(\d+)/)
+  if (vm) return { kind: 'vimeo', id: vm[1], embeddable: true, label: '✅ Vimeo — se mostrará el video reproducible' }
+  if (/instagram\.com|tiktok\.com|facebook\.com|fb\.watch/.test(u))
+    return { kind: 'social', embeddable: false, label: '⚠️ Instagram/TikTok/Facebook NO permiten incrustar sus videos en otras páginas. Se mostrará como un botón "Ver video" que abre el enlace.' }
+  return { kind: 'other', embeddable: false, label: 'ℹ️ Enlace no reconocido para incrustar. Se mostrará como botón "Ver video". Para incrustar usa YouTube o Vimeo.' }
+}
+
+// Vista previa de una publicación tal como se verá en /blog
+function PostPreview({ post }: { post: { titulo: string; contenido: string; imageUrl?: string; videoUrl?: string; created_at?: string } }) {
+  const v = classifyVideo(post.videoUrl)
+  const fecha = post.created_at ? new Date(post.created_at) : new Date()
+  return (
+    <article className="bg-marfil rounded-3xl border border-arena shadow-sm overflow-hidden">
+      {post.imageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={post.imageUrl} alt={post.titulo} className="w-full h-56 object-cover" />
+      )}
+      <div className="p-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="bg-rosa-palo/70 text-rosa text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full">
+            {v.embeddable ? '🎬 Video' : '🌸 Consejo'}
+          </span>
+          <p className="text-xs text-foreground/50 font-semibold">
+            {fecha.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+        <h2 className="font-display text-3xl text-tinta font-semibold mt-2">{post.titulo || 'Sin título'}</h2>
+        <p className="mt-3 text-foreground/80 leading-relaxed whitespace-pre-line">{post.contenido}</p>
+        {v.kind === 'youtube' && (
+          <div className="mt-5 rounded-2xl overflow-hidden border border-arena">
+            <iframe src={`https://www.youtube-nocookie.com/embed/${v.id}`} title={post.titulo} className="w-full aspect-video" allowFullScreen />
+          </div>
+        )}
+        {v.kind === 'vimeo' && (
+          <div className="mt-5 rounded-2xl overflow-hidden border border-arena">
+            <iframe src={`https://player.vimeo.com/video/${v.id}`} title={post.titulo} className="w-full aspect-video" allowFullScreen />
+          </div>
+        )}
+        {post.videoUrl && !v.embeddable && (
+          <a href={post.videoUrl} target="_blank" rel="noopener noreferrer" className="mt-5 inline-block bg-tinta text-marfil px-6 py-2.5 rounded-full text-sm font-bold">🎬 Ver video</a>
+        )}
+      </div>
+    </article>
+  )
+}
+
 export default function ContentPage() {
   const [casos, setCasos] = useState<any[]>([])
   const [posts, setPosts] = useState<any[]>([])
@@ -279,6 +331,7 @@ function PostsManager({ posts, reload }: { posts: any[]; reload: () => void }) {
   const [videoUrl, setVideoUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
+  const [preview, setPreview] = useState(false)
 
   const publish = async () => {
     if (!titulo.trim() || !contenido.trim()) {
@@ -367,25 +420,56 @@ function PostsManager({ posts, reload }: { posts: any[]; reload: () => void }) {
           />
         </div>
         <div>
-          <p className="text-xs text-gray-500 mb-1">
-            🎬 Link de video (opcional — YouTube se muestra incrustado; otros links como botón)
-          </p>
+          <p className="text-xs text-gray-500 mb-1">🎬 Link de video (opcional)</p>
           <input
             type="url"
             value={videoUrl}
             onChange={(e) => setVideoUrl(e.target.value)}
-            placeholder="https://www.youtube.com/watch?v=..."
+            placeholder="Pega el link (YouTube o Vimeo para verlo dentro del sitio)"
             className={inputClass}
           />
+          {videoUrl.trim() && (
+            <p className={`text-xs mt-1 ${classifyVideo(videoUrl).embeddable ? 'text-salvia' : 'text-orange-600'}`}>
+              {classifyVideo(videoUrl).label}
+            </p>
+          )}
         </div>
-        <button
-          onClick={publish}
-          disabled={saving}
-          className="bg-rosa text-marfil px-6 py-2 rounded-full font-bold hover:opacity-90 transition disabled:opacity-50"
-        >
-          {saving ? 'Publicando...' : '📢 Publicar'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => {
+              if (!titulo.trim() && !contenido.trim()) {
+                showToast('Escribe algo para ver la vista previa', 'error')
+                return
+              }
+              setPreview(true)
+            }}
+            className="bg-tinta text-marfil px-6 py-2 rounded-full font-bold hover:bg-tinta-suave transition"
+          >
+            👁 Vista previa
+          </button>
+          <button
+            onClick={publish}
+            disabled={saving}
+            className="bg-rosa text-marfil px-6 py-2 rounded-full font-bold hover:opacity-90 transition disabled:opacity-50"
+          >
+            {saving ? 'Publicando...' : '📢 Publicar'}
+          </button>
+        </div>
       </div>
+
+      {/* Modal de vista previa */}
+      {preview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4" onClick={() => setPreview(false)}>
+          <div className="bg-crema rounded-3xl shadow-2xl border border-arena max-w-lg w-full max-h-[90vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-display text-xl text-tinta font-semibold">👁 Así se verá en el sitio</p>
+              <button onClick={() => setPreview(false)} className="text-gray-400 hover:text-tinta text-xl">✕</button>
+            </div>
+            <PostPreview post={{ titulo, contenido, imageUrl: file ? URL.createObjectURL(file) : undefined, videoUrl }} />
+            <p className="text-xs text-gray-400 mt-3 text-center">Esto es solo una previsualización. Aún no se ha publicado.</p>
+          </div>
+        </div>
+      )}
 
       {/* Publicaciones existentes */}
       {posts.length === 0 ? (
