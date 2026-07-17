@@ -174,12 +174,12 @@ export default function DocumentsTab({ patient }: { patient: any }) {
   return (
     <div className="space-y-4 max-w-3xl">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold text-gray-800">
+        <h2 className="font-display text-2xl text-tinta font-semibold">
           📄 Documentos ({documents.length})
         </h2>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700"
+          className="bg-tinta text-marfil px-4 py-2 rounded-full font-bold hover:bg-tinta-suave transition"
         >
           {showForm ? 'Cancelar' : '+ Nuevo Documento'}
         </button>
@@ -187,8 +187,8 @@ export default function DocumentsTab({ patient }: { patient: any }) {
 
       {/* Formulario nuevo documento */}
       {showForm && (
-        <div className="bg-white rounded-lg shadow p-6 space-y-4 border-2 border-blue-200">
-          <h3 className="font-bold text-gray-800">Generar Receta o Indicación</h3>
+        <div className="bg-marfil rounded-2xl shadow-sm p-6 space-y-4 border-2 border-tinta/20 animate-fade-up">
+          <h3 className="font-display text-xl text-tinta font-semibold">📄 Generar Receta o Indicación</h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <SelectField
@@ -224,7 +224,7 @@ export default function DocumentsTab({ patient }: { patient: any }) {
           <button
             onClick={save}
             disabled={saving}
-            className="bg-green-600 text-white px-8 py-2.5 rounded-lg font-bold hover:bg-green-700 disabled:opacity-50"
+            className="bg-salvia text-marfil px-8 py-2.5 rounded-full font-bold hover:opacity-90 transition disabled:opacity-50"
           >
             {saving ? 'Generando PDF...' : '📄 Generar Documento'}
           </button>
@@ -233,7 +233,7 @@ export default function DocumentsTab({ patient }: { patient: any }) {
 
       {/* Lista de documentos */}
       {documents.length === 0 ? (
-        <p className="text-gray-500 py-8 text-center bg-white rounded-lg shadow">
+        <p className="text-gray-500 py-8 text-center bg-marfil rounded-2xl border border-arena shadow-sm">
           Este paciente aún no tiene documentos
         </p>
       ) : (
@@ -241,10 +241,10 @@ export default function DocumentsTab({ patient }: { patient: any }) {
           {documents.map((doc) => (
             <div
               key={doc.id}
-              className="bg-white rounded-lg shadow px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+              className="bg-marfil rounded-2xl border border-arena shadow-sm px-4 py-3 flex flex-wrap items-center justify-between gap-3 hover:shadow-md transition"
             >
               <div>
-                <p className="font-bold text-gray-800">
+                <p className="font-bold text-tinta">
                   {doc.tipo === 'receta' ? '💊 Receta' : '📋 Indicaciones'}
                 </p>
                 <p className="text-sm text-gray-500">
@@ -257,7 +257,7 @@ export default function DocumentsTab({ patient }: { patient: any }) {
                 <button
                   onClick={() => openPdf(doc)}
                   disabled={working === doc.id}
-                  className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-gray-200 disabled:opacity-50"
+                  className="bg-white border border-arena text-tinta px-4 py-1.5 rounded-full text-sm font-bold hover:border-tinta-suave transition disabled:opacity-50"
                 >
                   👁 Ver PDF
                 </button>
@@ -265,7 +265,7 @@ export default function DocumentsTab({ patient }: { patient: any }) {
                   onClick={() => sendWhatsApp(doc)}
                   disabled={working === doc.id || !patient.phone}
                   title={!patient.phone ? 'El paciente no tiene teléfono registrado' : ''}
-                  className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50"
+                  className="bg-salvia text-marfil px-4 py-1.5 rounded-full text-sm font-bold hover:opacity-90 transition disabled:opacity-50"
                 >
                   💬 WhatsApp
                 </button>

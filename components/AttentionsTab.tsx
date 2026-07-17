@@ -102,7 +102,7 @@ export default function AttentionsTab({ patient }: { patient: any }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold text-gray-800">
+        <h2 className="font-display text-2xl text-tinta font-semibold">
           📝 Historial de Atenciones ({attentions.length})
         </h2>
         <button
@@ -118,8 +118,8 @@ export default function AttentionsTab({ patient }: { patient: any }) {
 
       {/* Formulario nueva atención */}
       {showForm && (
-        <div className="bg-white rounded-lg shadow p-6 space-y-5 border-2 border-blue-200">
-          <h3 className="font-bold text-gray-800">Registrar Atención</h3>
+        <div className="bg-marfil rounded-2xl shadow-sm p-6 space-y-5 border-2 border-tinta/20 animate-fade-up">
+          <h3 className="font-display text-xl text-tinta font-semibold">✍️ Registrar Atención</h3>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <TextField label="Fecha" type="date" value={form.fecha} onChange={set('fecha')} />
@@ -154,7 +154,7 @@ export default function AttentionsTab({ patient }: { patient: any }) {
           <button
             onClick={save}
             disabled={saving}
-            className="bg-green-600 text-white px-8 py-2.5 rounded-lg font-bold hover:bg-green-700 disabled:opacity-50"
+            className="bg-salvia text-marfil px-8 py-2.5 rounded-full font-bold hover:opacity-90 transition disabled:opacity-50"
           >
             {saving ? 'Guardando...' : '💾 Guardar Atención'}
           </button>
@@ -163,24 +163,36 @@ export default function AttentionsTab({ patient }: { patient: any }) {
 
       {/* Lista de atenciones */}
       {attentions.length === 0 ? (
-        <p className="text-gray-500 py-8 text-center bg-white rounded-lg shadow">
+        <p className="text-gray-500 py-8 text-center bg-marfil rounded-2xl border border-arena shadow-sm">
           Este paciente aún no tiene atenciones registradas
         </p>
       ) : (
         <div className="space-y-2">
           {attentions.map((a) => (
-            <div key={a.id} className="bg-white rounded-lg shadow">
+            <div key={a.id} className="bg-marfil rounded-2xl border border-arena shadow-sm overflow-hidden">
               <button
                 onClick={() => setExpanded(expanded === a.id ? null : a.id)}
-                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 rounded-lg"
+                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-rosa-palo/20 transition"
               >
                 <div>
-                  <p className="font-bold text-gray-800">
+                  <p className="font-bold text-tinta">
                     📅 {new Date(a.fecha + 'T00:00:00').toLocaleDateString('es-CL')}
                   </p>
                   <p className="text-sm text-gray-500 truncate max-w-md">{summary(a)}</p>
                 </div>
-                <span className="text-gray-400">{expanded === a.id ? '▲' : '▼'}</span>
+                <div className="flex items-center gap-3">
+                  {a.valor && (
+                    <span className="bg-salvia/15 text-salvia font-bold text-xs px-3 py-1 rounded-full">
+                      ${Number(a.valor).toLocaleString('es-CL')}
+                    </span>
+                  )}
+                  {a.boleta_emitida && (
+                    <span className="bg-arena/70 text-tinta font-bold text-xs px-3 py-1 rounded-full">
+                      🧾 Boleta
+                    </span>
+                  )}
+                  <span className="text-gray-400">{expanded === a.id ? '▲' : '▼'}</span>
+                </div>
               </button>
 
               {expanded === a.id && (

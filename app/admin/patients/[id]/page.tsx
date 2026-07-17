@@ -24,6 +24,19 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: 'Cancelada',
 }
 
+// Avatar con iniciales y color según el nombre (igual que en la lista)
+const AVATAR_COLORS = ['bg-tinta', 'bg-rosa', 'bg-salvia', 'bg-[#d9a441]', 'bg-tinta-suave']
+const initials = (name?: string) =>
+  String(name ?? '?')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+const colorFor = (name?: string) =>
+  AVATAR_COLORS[(String(name ?? 'A').charCodeAt(0) + String(name ?? 'A').length) % AVATAR_COLORS.length]
+
 export default function PatientDetailPage() {
   const params = useParams()
   const patientId = String(params.id)
@@ -113,10 +126,30 @@ export default function PatientDetailPage() {
             <Link href="/admin/patients" className="text-sm text-tinta-suave hover:text-tinta transition">
               ← Volver a pacientes
             </Link>
-            <h1 className="font-display text-3xl text-tinta font-medium mt-1">{patient.name}</h1>
-            <p className="text-sm text-gray-500">
-              {patient.rut || 'Sin RUT'} · {patient.phone || 'Sin teléfono'} · {patient.email}
-            </p>
+            <div className="flex items-center gap-3 mt-1.5">
+              <span
+                className={`w-12 h-12 rounded-full ${colorFor(patient.name)} text-marfil flex items-center justify-center text-base font-bold shrink-0 shadow-sm`}
+              >
+                {initials(patient.name)}
+              </span>
+              <div>
+                <h1 className="font-display text-3xl text-tinta font-medium leading-tight">
+                  {patient.name}
+                </h1>
+                <p className="text-sm text-gray-500">
+                  {patient.rut || 'Sin RUT'} · {patient.phone || 'Sin teléfono'} · {patient.email}
+                </p>
+              </div>
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-bold self-start mt-1 ${
+                  patient.insurance
+                    ? 'bg-rosa-palo/70 text-tinta border border-rosa/30'
+                    : 'bg-arena/70 text-gray-600 border border-arena'
+                }`}
+              >
+                {patient.insurance || 'Particular'}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -137,51 +170,51 @@ export default function PatientDetailPage() {
 
       {/* Tab: Información */}
       {tab === 'info' && (
-        <div className="bg-white rounded-lg shadow p-6 max-w-2xl">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">Datos del Paciente</h2>
+        <div className="bg-marfil rounded-2xl border border-arena shadow-sm p-6 max-w-2xl animate-fade-up">
+          <h2 className="font-display text-2xl text-tinta font-semibold mb-4">📋 Datos del Paciente</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-600 mb-1">Nombre</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wide text-tinta-suave mb-1.5">Nombre</label>
               <input name="name" value={form.name || ''} onChange={handleField} autoComplete="off"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-600 mb-1">RUT</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wide text-tinta-suave mb-1.5">RUT</label>
               <input name="rut" value={form.rut || ''} onChange={handleField} autoComplete="off"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-600 mb-1">Teléfono</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wide text-tinta-suave mb-1.5">Teléfono</label>
               <input name="phone" value={form.phone || ''} onChange={handleField} autoComplete="off"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-600 mb-1">Email</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wide text-tinta-suave mb-1.5">Email</label>
               <input name="email" value={form.email || ''} onChange={handleField} autoComplete="off"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-600 mb-1">Fecha de nacimiento</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wide text-tinta-suave mb-1.5">Fecha de nacimiento</label>
               <input type="date" name="date_of_birth" value={form.date_of_birth || ''} onChange={handleField} autoComplete="off"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-600 mb-1">CESFAM</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wide text-tinta-suave mb-1.5">CESFAM</label>
               <input name="cesfam" value={form.cesfam || ''} onChange={handleField} autoComplete="off"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-semibold text-gray-600 mb-1">Domicilio</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wide text-tinta-suave mb-1.5">Domicilio</label>
               <input name="address" value={form.address || ''} onChange={handleField} autoComplete="off"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-600 mb-1">Convenio / Previsión</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wide text-tinta-suave mb-1.5">Convenio / Previsión</label>
               <select
                 name="insurance"
                 value={form.insurance || ''}
                 onChange={handleField} autoComplete="off"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-arena rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-tinta-suave"
               >
                 <option value="">— Sin convenio —</option>
                 {/* Si el valor actual no está en la lista, se conserva */}
@@ -277,7 +310,7 @@ export default function PatientDetailPage() {
                         {(a.status === 'scheduled' || a.status === 'cancelled') && (
                           <button
                             onClick={() => setScheduler(a)}
-                            className="text-tinta hover:text-rosa text-sm font-semibold"
+                            className="bg-rosa-palo/60 text-tinta px-3 py-1 rounded-full text-xs font-bold hover:bg-rosa-palo transition"
                             title={a.status === 'cancelled' ? 'Volver a agendar esta cita' : 'Cambiar fecha/hora'}
                           >
                             🔄 Reagendar
