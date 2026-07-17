@@ -477,35 +477,120 @@ function PostsManager({ posts, reload }: { posts: any[]; reload: () => void }) {
       ) : (
         <div className="space-y-2">
           {posts.map((p) => (
-            <div
-              key={p.id}
-              className={`flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-white border border-arena ${
-                !p.publicado ? 'opacity-60' : ''
-              }`}
-            >
-              <div className="flex-1 min-w-40">
-                <p className="font-bold text-tinta text-sm">{p.titulo}</p>
-                <p className="text-xs text-gray-400">
-                  {new Date(p.created_at).toLocaleDateString('es-CL')} ·{' '}
-                  {p.publicado ? '🟢 Publicado' : '⚪ Oculto'}
-                </p>
-              </div>
-              <button
-                onClick={() => togglePublish(p)}
-                className="bg-arena text-tinta px-4 py-1 rounded-full text-xs font-bold hover:bg-arena/70 transition"
-              >
-                {p.publicado ? 'Ocultar' : 'Publicar'}
-              </button>
-              <button
-                onClick={() => remove(p)}
-                className="text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 text-xs font-semibold transition"
-              >
-                🗑 Eliminar
-              </button>
-            </div>
+            <PostRow key={p.id} post={p} reload={reload} onToggle={() => togglePublish(p)} onRemove={() => remove(p)} />
           ))}
         </div>
       )}
     </section>
+  )
+}
+
+// Fila de publicación con edición inline
+function PostRow({ post, reload, onToggle, onRemove }: { post: any; reload: () => void; onToggle: () => void; onRemove: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [preview, setPreview] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [titulo, setTitulo] = useState(post.titulo ?? '')
+  const [contenido, setContenido] = useState(post.contenido ?? '')
+  const [videoUrl, setVideoUrl] = useState(post.video_url ?? '')
+  const [file, setFile] = useState<File | null>(null)
+  const [quitarImagen, setQuitarImagen] = useState(false)
+
+  const guardar = async () => {
+    if (!titulo.trim() || !contenido.trim()) {
+      showToast('Completa el título y el contenido', 'error')
+      return
+    }
+    setSaving(true)
+    try {
+      const fields: any = {
+        titulo: titulo.trim(),
+        contenido: contenido.trim(),
+        video_url: videoUrl.trim() || null,
+      }
+      if (file) fields.image_url = await uploadPublicImage('noticias', file)
+      else if (quitarImagen) fields.image_url = null
+      await updatePost(post.id, fields)
+      showToast('Publicación actualizada')
+      setEditing(false)
+      setFile(null)
+      setQuitarImagen(false)
+      reload()
+    } catch (err) {
+      console.error(err)
+      showToast('Error guardando los cambios', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const imagenPreview = file
+    ? URL.createObjectURL(file)
+    : quitarImagen
+    ? undefined
+    : post.image_url || undefined
+
+  if (editing) {
+    return (
+      <div className="bg-white border-2 border-tinta/20 rounded-2xl p-5 space-y-3">
+        <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título" className={inputClass} />
+        <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={5} placeholder="Contenido" className={inputClass} />
+        <div>
+          <p className="text-xs text-gray-500 mb-1">🎬 Link de video (opcional)</p>
+          <input type="url" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="YouTube o Vimeo para verlo dentro del sitio" className={inputClass} />
+          {videoUrl.trim() && (
+            <p className={`text-xs mt-1 ${classifyVideo(videoUrl).embeddable ? 'text-salvia' : 'text-orange-600'}`}>{classifyVideo(videoUrl).label}</p>
+          )}
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Imagen</p>
+          {post.image_url && !file && !quitarImagen && (
+            <div className="flex items-center gap-2 mb-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={post.image_url} alt="" className="w-16 h-16 object-cover rounded-lg" />
+              <button onClick={() => setQuitarImagen(true)} className="text-rosa text-xs font-semibold hover:underline">Quitar imagen</button>
+            </div>
+          )}
+          <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="block text-sm text-gray-600 file:mr-3 file:px-4 file:py-2 file:rounded-full file:border-0 file:bg-tinta file:text-marfil file:font-bold file:cursor-pointer" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setPreview(true)} className="bg-tinta text-marfil px-5 py-2 rounded-full text-sm font-bold hover:bg-tinta-suave transition">👁 Vista previa</button>
+          <button onClick={guardar} disabled={saving} className="bg-salvia text-marfil px-6 py-2 rounded-full text-sm font-bold hover:opacity-90 transition disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar cambios'}</button>
+          <button onClick={() => { setEditing(false); setTitulo(post.titulo); setContenido(post.contenido); setVideoUrl(post.video_url ?? ''); setFile(null); setQuitarImagen(false) }} className="px-6 py-2 rounded-full text-sm font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition">Cancelar</button>
+        </div>
+
+        {preview && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4" onClick={() => setPreview(false)}>
+            <div className="bg-crema rounded-3xl shadow-2xl border border-arena max-w-lg w-full max-h-[90vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <p className="font-display text-xl text-tinta font-semibold">👁 Así se verá en el sitio</p>
+                <button onClick={() => setPreview(false)} className="text-gray-400 hover:text-tinta text-xl">✕</button>
+              </div>
+              <PostPreview post={{ titulo, contenido, imageUrl: imagenPreview, videoUrl, created_at: post.created_at }} />
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className={`flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-white border border-arena ${!post.publicado ? 'opacity-60' : ''}`}>
+      {post.image_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={post.image_url} alt="" className="w-12 h-12 object-cover rounded-lg shrink-0" />
+      )}
+      <div className="flex-1 min-w-40">
+        <p className="font-bold text-tinta text-sm">
+          {classifyVideo(post.video_url).embeddable ? '🎬 ' : ''}{post.titulo}
+        </p>
+        <p className="text-xs text-gray-400">
+          {new Date(post.created_at).toLocaleDateString('es-CL')} · {post.publicado ? '🟢 Publicado' : '⚪ Oculto'}
+        </p>
+      </div>
+      <button onClick={() => setEditing(true)} className="bg-tinta text-marfil px-4 py-1 rounded-full text-xs font-bold hover:bg-tinta-suave transition">✏️ Editar</button>
+      <button onClick={onToggle} className="bg-arena text-tinta px-4 py-1 rounded-full text-xs font-bold hover:bg-arena/70 transition">{post.publicado ? 'Ocultar' : 'Publicar'}</button>
+      <button onClick={onRemove} className="text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 text-xs font-semibold transition">🗑</button>
+    </div>
   )
 }
