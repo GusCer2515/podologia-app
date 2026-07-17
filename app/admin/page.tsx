@@ -268,10 +268,16 @@ export default function AdminAgendaPage() {
         <p className="text-gray-500 py-8 text-center">Cargando agenda...</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3">
-          {days.map((day) => (
+          {days.map((day) => {
+            const isPast = day.iso < todayIso
+            // Atenuar días pasados y días inhábiles (sin horario de atención)
+            const isDimmed = isPast || (day.entries.length === 0 && !day.blocked)
+            return (
             <div
               key={day.iso}
               className={`bg-marfil rounded-2xl border shadow-sm min-h-32 ${
+                isDimmed ? 'opacity-50 grayscale' : ''
+              } ${
                 day.blocked
                   ? 'border-rosa/50'
                   : day.isToday
@@ -288,8 +294,12 @@ export default function AdminAgendaPage() {
                     : 'bg-arena/50 text-tinta'
                 }`}
               >
-                <p className="text-xs font-semibold uppercase">{day.name}</p>
-                <p className="text-sm font-bold">{fmtShort(day.date)}</p>
+                <p className={`text-xs font-semibold uppercase ${isPast ? 'line-through' : ''}`}>
+                  {day.name}
+                </p>
+                <p className={`text-sm font-bold ${isPast ? 'line-through' : ''}`}>
+                  {fmtShort(day.date)}
+                </p>
               </div>
 
               <div className="p-2 space-y-1.5">
@@ -307,10 +317,22 @@ export default function AdminAgendaPage() {
                   </div>
                 )}
 
-                {day.entries.length === 0 && !day.blocked ? (
-                  <p className="text-xs text-gray-400 text-center py-3">Sin atención</p>
-                ) : (
-                  day.entries.map(({ time, apt, isFree }) =>
+                {(() => {
+                  const visibles = day.entries.filter((e) => e.apt || e.isFree)
+                  if (visibles.length === 0 && !day.blocked) {
+                    return (
+                      <p className="text-xs text-gray-400 text-center py-3">
+                        {day.entries.length === 0
+                          ? 'Sin atención'
+                          : day.iso < todayIso
+                          ? 'Día pasado'
+                          : day.isToday
+                          ? 'Sin más cupos por hoy'
+                          : 'Sin cupos disponibles'}
+                      </p>
+                    )
+                  }
+                  return visibles.map(({ time, apt, isFree }) =>
                     apt ? (
                       <div
                         key={time}
@@ -371,10 +393,11 @@ export default function AdminAgendaPage() {
                       </button>
                     ) : null
                   )
-                )}
+                })()}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
