@@ -11,6 +11,7 @@ import {
   adminCreateAppointment,
 } from '@/lib/supabase'
 import { getAvailableSlots, todayLocalStr } from '@/lib/slots'
+import { initials, colorFor } from '@/lib/avatar'
 import { showToast } from '@/components/toast'
 
 const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
@@ -47,9 +48,9 @@ function genSlotTimes(config: any): string[] {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  scheduled: 'bg-blue-50 border-blue-400 text-blue-900',
-  completed: 'bg-green-50 border-green-400 text-green-900',
-  cancelled: 'bg-red-50 border-red-300 text-red-400 line-through',
+  scheduled: 'bg-white border-tinta text-tinta',
+  completed: 'bg-salvia/10 border-salvia text-tinta',
+  cancelled: 'bg-rosa-palo/30 border-rosa/40 text-rosa/60 line-through',
 }
 
 export default function AdminAgendaPage() {
@@ -67,6 +68,8 @@ export default function AdminAgendaPage() {
   const [bookSearch, setBookSearch] = useState('')
   const [bookNotes, setBookNotes] = useState('')
   const [savingBook, setSavingBook] = useState(false)
+  // Modal de confirmación al cancelar una cita
+  const [cancelTarget, setCancelTarget] = useState<any>(null)
 
   const todayIso = todayLocalStr()
 
@@ -300,6 +303,18 @@ export default function AdminAgendaPage() {
                 <p className={`text-sm font-bold ${isPast ? 'line-through' : ''}`}>
                   {fmtShort(day.date)}
                 </p>
+                {(() => {
+                  const n = day.appointments.filter((a) => a.status === 'scheduled').length
+                  return n > 0 && !day.blocked && !isPast ? (
+                    <span
+                      className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        day.isToday ? 'bg-marfil/25 text-marfil' : 'bg-tinta/10 text-tinta'
+                      }`}
+                    >
+                      {n} cita{n > 1 ? 's' : ''}
+                    </span>
+                  ) : null
+                })()}
               </div>
 
               <div className="p-2 space-y-1.5">
@@ -336,22 +351,32 @@ export default function AdminAgendaPage() {
                     apt ? (
                       <div
                         key={time}
-                        className={`border-l-4 rounded p-2 text-xs ${
+                        className={`border-l-4 rounded-xl p-2 text-xs shadow-sm hover:shadow-md transition ${
                           day.blocked && apt.status === 'scheduled'
                             ? 'bg-rosa-palo/40 border-rosa text-tinta'
                             : STATUS_STYLE[apt.status] || STATUS_STYLE.scheduled
                         }`}
                       >
-                        <p className="font-bold">🕐 {time}</p>
+                        <div className="flex items-center justify-between">
+                          <p className="font-bold">🕐 {time}</p>
+                          {apt.status === 'completed' && <span title="Completada">✅</span>}
+                        </div>
                         <Link
                           href={`/admin/patients/${apt.patients?.id ?? ''}`}
-                          className="font-semibold hover:underline block truncate"
+                          className="flex items-center gap-1.5 mt-1 hover:underline"
                           title={apt.patients?.name}
                         >
-                          {apt.patients?.name || 'Paciente'}
+                          <span
+                            className={`w-5 h-5 rounded-full ${colorFor(apt.patients?.name)} text-marfil flex items-center justify-center text-[8px] font-bold shrink-0`}
+                          >
+                            {initials(apt.patients?.name)}
+                          </span>
+                          <span className="font-semibold truncate">
+                            {apt.patients?.name || 'Paciente'}
+                          </span>
                         </Link>
                         {apt.patients?.phone && (
-                          <p className="text-gray-500">{apt.patients.phone}</p>
+                          <p className="text-gray-500 mt-0.5">📞 {apt.patients.phone}</p>
                         )}
                         {day.blocked && apt.status === 'scheduled' && (
                           <Link
@@ -365,16 +390,14 @@ export default function AdminAgendaPage() {
                           <div className="flex gap-1 mt-2">
                             <button
                               onClick={() => setStatus(apt.id, 'completed')}
-                              className="flex-1 bg-green-600 text-white rounded px-1 py-0.5 hover:bg-green-700"
+                              className="flex-1 bg-salvia text-marfil rounded-full px-1 py-0.5 font-bold hover:opacity-90 transition"
                               title="Marcar como completada"
                             >
                               ✓
                             </button>
                             <button
-                              onClick={() => {
-                                if (confirm('¿Cancelar esta cita?')) setStatus(apt.id, 'cancelled')
-                              }}
-                              className="flex-1 bg-red-500 text-white rounded px-1 py-0.5 hover:bg-red-600"
+                              onClick={() => setCancelTarget(apt)}
+                              className="flex-1 bg-rosa text-marfil rounded-full px-1 py-0.5 font-bold hover:opacity-90 transition"
                               title="Cancelar cita"
                             >
                               ✕
@@ -398,6 +421,40 @@ export default function AdminAgendaPage() {
             </div>
             )
           })}
+        </div>
+      )}
+
+      {/* ===== Modal: confirmar cancelación de cita ===== */}
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4">
+          <div className="bg-marfil rounded-3xl shadow-2xl border border-arena max-w-sm w-full p-8 text-center animate-fade-up">
+            <div className="w-16 h-16 mx-auto rounded-full bg-rosa-palo flex items-center justify-center text-3xl">
+              🕐
+            </div>
+            <h2 className="font-display text-2xl text-tinta font-medium mt-4">
+              ¿Cancelar la cita de <span className="italic">{cancelTarget.patients?.name}</span>?
+            </h2>
+            <p className="mt-3 text-sm text-foreground/75">
+              {new Date(cancelTarget.appointment_date).toLocaleDateString('es-CL')} a las{' '}
+              {String(cancelTarget.appointment_date).substring(11, 16)} hrs — la hora quedará
+              liberada para otro paciente.
+            </p>
+            <button
+              onClick={() => {
+                setStatus(cancelTarget.id, 'cancelled')
+                setCancelTarget(null)
+              }}
+              className="mt-6 w-full bg-rosa text-marfil py-3 rounded-full font-bold hover:opacity-90 transition"
+            >
+              Sí, cancelar cita
+            </button>
+            <button
+              onClick={() => setCancelTarget(null)}
+              className="mt-3 w-full py-3 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition"
+            >
+              Volver
+            </button>
+          </div>
         </div>
       )}
 
