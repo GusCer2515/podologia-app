@@ -345,11 +345,28 @@ export default function AdminAgendaPage() {
                     <p className="text-xs text-gray-400 text-center py-3">{isPast ? 'Día pasado' : 'Sin atención'}</p>
                   ) : (
                     <>
-                      {/* Citas del día */}
-                      {day.dayAppts
-                        .slice()
-                        .sort((a, b) => String(a.appointment_date).localeCompare(String(b.appointment_date)))
-                        .map((apt) => {
+                      {/* Línea de tiempo: citas ACTIVAS + cupos libres, en orden */}
+                      {[
+                        ...day.dayAppts
+                          .filter((a) => a.status !== 'cancelled')
+                          .map((a) => ({ min: toMin(String(a.appointment_date).substring(11, 16)), kind: 'appt' as const, apt: a })),
+                        ...day.freeSlots.map((t) => ({ min: toMin(t), kind: 'free' as const, time: t })),
+                      ]
+                        .sort((a, b) => a.min - b.min)
+                        .map((row) => {
+                          if (row.kind === 'free') {
+                            return (
+                              <button
+                                key={`free-${row.time}`}
+                                onClick={() => setBookSlot({ date: day.iso, time: row.time, info: day.info })}
+                                className="w-full border border-dashed border-arena rounded-lg p-1.5 text-xs text-gray-400 hover:border-tinta-suave hover:text-tinta hover:bg-rosa-palo/20 transition text-left"
+                                title="Agendar en este cupo"
+                              >
+                                + {row.time} disponible
+                              </button>
+                            )
+                          }
+                          const apt = row.apt
                           const t = String(apt.appointment_date).substring(11, 16)
                           const endT = toHHMM(toMin(t) + (apt.duration_minutes || 60))
                           const isMani = apt.tipo === 'manicura'
@@ -357,7 +374,7 @@ export default function AdminAgendaPage() {
                             <div
                               key={apt.id}
                               className={`border-l-4 rounded-xl p-2 text-xs shadow-sm hover:shadow-md transition ${
-                                day.blocked && apt.status === 'scheduled'
+                                day.blocked
                                   ? 'bg-rosa-palo/40 border-rosa text-tinta'
                                   : isMani && apt.status === 'scheduled'
                                   ? 'bg-[#f4eefa] border-[#a37cc4] text-tinta'
@@ -388,19 +405,7 @@ export default function AdminAgendaPage() {
                           )
                         })}
 
-                      {/* Cupos libres */}
-                      {day.freeSlots.map((time) => (
-                        <button
-                          key={time}
-                          onClick={() => setBookSlot({ date: day.iso, time, info: day.info })}
-                          className="w-full border border-dashed border-arena rounded p-1.5 text-xs text-gray-400 hover:border-tinta-suave hover:text-tinta hover:bg-rosa-palo/20 transition text-left"
-                          title="Agendar en este cupo"
-                        >
-                          + {time} disponible
-                        </button>
-                      ))}
-
-                      {day.config && day.freeSlots.length === 0 && day.dayAppts.length === 0 && !day.blocked && (
+                      {day.config && day.freeSlots.length === 0 && day.dayAppts.filter((a) => a.status !== 'cancelled').length === 0 && !day.blocked && (
                         <p className="text-xs text-gray-400 text-center py-3">{isPast ? 'Día pasado' : day.isToday ? 'Sin más cupos hoy' : 'Sin cupos'}</p>
                       )}
                     </>
