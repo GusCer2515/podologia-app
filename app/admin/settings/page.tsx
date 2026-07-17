@@ -34,7 +34,8 @@ type DayConfig = {
   is_active: boolean
   start_time: string
   end_time: string
-  slot_duration_minutes: number
+  lunch_start: string
+  lunch_end: string
 }
 
 const fmtCLP = (n: number) =>
@@ -72,7 +73,8 @@ export default function SettingsPage() {
         is_active: row?.is_active ?? false,
         start_time: row?.start_time?.substring(0, 5) ?? '09:00',
         end_time: row?.end_time?.substring(0, 5) ?? '18:00',
-        slot_duration_minutes: row?.slot_duration_minutes ?? 30,
+        lunch_start: row?.lunch_start?.substring(0, 5) ?? '',
+        lunch_end: row?.lunch_end?.substring(0, 5) ?? '',
       }
     }
     setDays(map)
@@ -108,7 +110,8 @@ export default function SettingsPage() {
           is_active: c.is_active,
           start_time: c.start_time,
           end_time: c.end_time,
-          slot_duration_minutes: c.slot_duration_minutes,
+          lunch_start: c.lunch_start || null,
+          lunch_end: c.lunch_end || null,
         })
       }
       showToast('Horarios guardados correctamente')
@@ -272,8 +275,9 @@ export default function SettingsPage() {
       <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
         <h2 className="font-display text-2xl text-tinta font-semibold mb-1">🕐 Horarios de atención</h2>
         <p className="text-sm text-gray-500 mb-5">
-          Define qué días atiendes y en qué horario. Esto controla las horas que ven los
-          pacientes al agendar.
+          Define qué días atiendes, el horario y el bloque de almuerzo (no agendable). Cada
+          atención de podología dura 1 hora; las manicuras usan la duración de cada servicio.
+          Esto controla las horas disponibles tanto para ti como para los pacientes en la web.
         </p>
 
         <div className="space-y-2">
@@ -318,17 +322,22 @@ export default function SettingsPage() {
                       />
                     </label>
                     <label className="text-xs text-gray-500">
-                      Duración cita{' '}
-                      <select
-                        value={c.slot_duration_minutes}
-                        onChange={(e) => setDay(d.dow, 'slot_duration_minutes', Number(e.target.value))}
+                      🍽 Almuerzo{' '}
+                      <input
+                        type="time"
+                        value={c.lunch_start}
+                        onChange={(e) => setDay(d.dow, 'lunch_start', e.target.value)}
                         className={inputClass}
-                      >
-                        <option value={30}>30 min</option>
-                        <option value={45}>45 min</option>
-                        <option value={60}>60 min (1 h)</option>
-                        <option value={90}>90 min (1½ h)</option>
-                      </select>
+                      />
+                    </label>
+                    <label className="text-xs text-gray-500">
+                      a{' '}
+                      <input
+                        type="time"
+                        value={c.lunch_end}
+                        onChange={(e) => setDay(d.dow, 'lunch_end', e.target.value)}
+                        className={inputClass}
+                      />
                     </label>
                   </>
                 ) : (

@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { signIn, signOut, getSession } from '@/lib/supabase'
 import { Toaster } from '@/components/toast'
+import NotificationBell from '@/components/NotificationBell'
 
 const NAV_ITEMS = [
   { href: '/admin', label: '📅 Agenda' },
@@ -173,9 +174,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </div>
       </aside>
 
-      {/* Contenido (sin overflow aquí: rompería los encabezados sticky;
-          las tablas anchas tienen su propio scroll interno) */}
-      <main className="flex-1 min-w-0 p-6">{children}</main>
+      {/* Contenido */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Barra superior con la campana de notificaciones */}
+        <div className="sticky top-0 z-30 flex justify-end px-6 py-2.5 bg-crema/80 backdrop-blur border-b border-arena/50">
+          <NotificationBell />
+        </div>
+        <main className="p-6">{children}</main>
+      </div>
 
       {/* Notificaciones elegantes */}
       <Toaster />

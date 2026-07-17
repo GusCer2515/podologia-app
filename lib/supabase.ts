@@ -39,6 +39,7 @@ export interface BookingData {
   rut: string
   datetime: string // formato: "2026-07-20T10:00:00"
   notes?: string
+  duration?: number
 }
 
 export async function bookAppointment(booking: BookingData) {
@@ -49,9 +50,17 @@ export async function bookAppointment(booking: BookingData) {
     p_rut: booking.rut,
     p_datetime: booking.datetime,
     p_notes: booking.notes ?? null,
+    p_duration: booking.duration ?? 60,
   })
   if (error) throw error
   return data as { success: boolean; error?: string; appointment_id?: string }
+}
+
+// Reconocer paciente por RUT desde el sitio público (solo devuelve el nombre)
+export async function findPatientByRut(rut: string) {
+  const { data, error } = await supabase.rpc('find_patient_by_rut', { p_rut: rut })
+  if (error) throw error
+  return data as { found: boolean; name?: string }
 }
 
 export async function getOccupiedSlots(date: string) {
@@ -144,7 +153,7 @@ export async function deletePatient(id: string) {
 export async function getPatientAppointments(patientId: string) {
   const { data, error } = await supabase
     .from('appointments')
-    .select('*')
+    .select('*, nail_services(nombre)')
     .eq('patient_id', patientId)
     .order('appointment_date', { ascending: false })
 
@@ -430,7 +439,7 @@ export async function getDocumentSignedUrl(path: string) {
 export async function getAppointmentsBetween(startIso: string, endIso: string) {
   const { data, error } = await supabase
     .from('appointments')
-    .select('*, patients(id, name, phone, insurance), nail_services(nombre)')
+    .select('*, patients(id, name, phone, insurance), nail_services(nombre, duracion_minutes)')
     .gte('appointment_date', startIso)
     .lt('appointment_date', endIso)
     .order('appointment_date', { ascending: true })
@@ -462,12 +471,24 @@ export async function adminCreateAppointment(
   patientId: string,
   datetime: string,
   notes?: string,
-  extra?: { tipo?: string; nail_service_id?: string | null; valor?: number | null }
+  extra?: { tipo?: string; nail_service_id?: string | null; valor?: number | null; duration_minutes?: number }
 ) {
   const { error } = await supabase
     .from('appointments')
     .insert([{ patient_id: patientId, appointment_date: datetime, notes: notes || null, ...extra }])
   if (error) throw error
+}
+
+// Citas recientes creadas desde el sitio web (para el centro de notificaciones)
+export async function getRecentWebBookings(limit = 20) {
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('id, appointment_date, created_at, status, patients(name, phone)')
+    .eq('origin', 'web')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data
 }
 
 // ============================================================

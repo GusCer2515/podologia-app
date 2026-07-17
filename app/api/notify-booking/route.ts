@@ -51,19 +51,19 @@ function emailBase(info: any, contenido: string) {
 
 export async function POST(req: Request) {
   try {
-    const { appointmentId, name, email, phone, date, time } = await req.json()
+    const body = await req.json()
+    const { appointmentId, date, time } = body
+    let { name, email, phone } = body
 
-    // Validaciones básicas
-    if (!appointmentId || !name || !email || !date || !time) {
-      return NextResponse.json({ ok: false }, { status: 400 })
-    }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    if (!appointmentId || !date || !time) {
       return NextResponse.json({ ok: false }, { status: 400 })
     }
 
-    // Verificar que la cita exista de verdad (anti-abuso del endpoint)
-    const verify = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/appointment_exists`,
+    // Obtener contacto real desde la BD por el id de la cita.
+    // Esto verifica que la cita exista Y recupera el email de pacientes
+    // recurrentes que agendaron solo con su RUT.
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/get_appointment_contact`,
       {
         method: 'POST',
         headers: {
@@ -74,8 +74,15 @@ export async function POST(req: Request) {
         body: JSON.stringify({ p_id: appointmentId }),
       }
     )
-    const exists = await verify.json()
-    if (exists !== true) {
+    const contact = await res.json()
+    if (!contact?.found) {
+      return NextResponse.json({ ok: false }, { status: 400 })
+    }
+    name = contact.name || name
+    email = contact.email || email
+    phone = contact.phone || phone
+
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return NextResponse.json({ ok: false }, { status: 400 })
     }
 

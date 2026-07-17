@@ -11,7 +11,7 @@ import {
   adminCreateAppointment,
   getNailServices,
 } from '@/lib/supabase'
-import { getAvailableSlots, todayLocalStr } from '@/lib/slots'
+import { todayLocalStr } from '@/lib/slots'
 import { initials, colorFor } from '@/lib/avatar'
 import { showToast } from '@/components/toast'
 
@@ -24,29 +24,16 @@ function mondayOf(d: Date): Date {
   monday.setHours(0, 0, 0, 0)
   return monday
 }
-
-function toLocalIso(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const toLocalIso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const fmtShort = (d: Date) => d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
+const toMin = (hhmm: string) => {
+  const [h, m] = String(hhmm).split(':').map(Number)
+  return h * 60 + m
 }
-
-function fmtShort(d: Date): string {
-  return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
-}
-
-// Horas teóricas de un día según su configuración de horario
-function genSlotTimes(config: any): string[] {
-  if (!config) return []
-  const [sh, sm] = String(config.start_time).split(':').map(Number)
-  const [eh, em] = String(config.end_time).split(':').map(Number)
-  const step = config.slot_duration_minutes || 30
-  const out: string[] = []
-  for (let mins = sh * 60 + sm; mins + step <= eh * 60 + em; mins += step) {
-    out.push(
-      `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
-    )
-  }
-  return out
-}
+const toHHMM = (min: number) =>
+  `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
+const overlaps = (a1: number, a2: number, b1: number, b2: number) => a1 < b2 && b1 < a2
 
 const STATUS_STYLE: Record<string, string> = {
   scheduled: 'bg-white border-tinta text-tinta',
@@ -60,20 +47,18 @@ export default function AdminAgendaPage() {
   const [blockouts, setBlockouts] = useState<any[]>([])
   const [availability, setAvailability] = useState<any[]>([])
   const [patients, setPatients] = useState<any[]>([])
-  const [freeToday, setFreeToday] = useState<number | null>(null)
+  const [nailServices, setNailServices] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [filtro, setFiltro] = useState<'todo' | 'podologia' | 'manicura'>('todo')
 
-  // Modal de agendar desde un cupo libre
-  const [bookSlot, setBookSlot] = useState<{ date: string; time: string } | null>(null)
+  // Modal de agendar
+  const [bookSlot, setBookSlot] = useState<{ date: string; time: string; info: any } | null>(null)
   const [bookPatient, setBookPatient] = useState('')
   const [bookSearch, setBookSearch] = useState('')
   const [bookNotes, setBookNotes] = useState('')
-  const [savingBook, setSavingBook] = useState(false)
-  // Rama de la cita: podología (por defecto) o manicura
   const [bookTipo, setBookTipo] = useState<'podologia' | 'manicura'>('podologia')
   const [bookServiceId, setBookServiceId] = useState('')
-  const [nailServices, setNailServices] = useState<any[]>([])
-  // Modal de confirmación al cancelar una cita
+  const [savingBook, setSavingBook] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<any>(null)
 
   const todayIso = todayLocalStr()
@@ -102,22 +87,14 @@ export default function AdminAgendaPage() {
     loadWeek(weekStart)
   }, [weekStart, loadWeek])
 
-  // KPI: horas libres HOY + lista de pacientes (para agendar desde cupos)
   useEffect(() => {
-    getAvailableSlots(todayLocalStr())
-      .then((r) => setFreeToday(r.slots.length))
-      .catch(() => setFreeToday(null))
-    getPatients()
-      .then((p) => setPatients(p || []))
-      .catch(() => {})
-    getNailServices(true)
-      .then((s) => setNailServices(s || []))
-      .catch(() => {})
+    getPatients().then((p) => setPatients(p || [])).catch(() => {})
+    getNailServices(true).then((s) => setNailServices(s || [])).catch(() => {})
   }, [])
 
-  const changeWeek = (deltaDays: number) => {
+  const changeWeek = (delta: number) => {
     const next = new Date(weekStart)
-    next.setDate(next.getDate() + deltaDays)
+    next.setDate(next.getDate() + delta)
     setWeekStart(next)
   }
 
@@ -136,20 +113,39 @@ export default function AdminAgendaPage() {
       showToast('Selecciona el paciente', 'error')
       return
     }
+    const servicio = nailServices.find((s) => s.id === bookServiceId)
+    const duration = bookTipo === 'manicura' ? servicio?.duracion_minutes ?? 60 : 60
     if (bookTipo === 'manicura' && !bookServiceId) {
       showToast('Selecciona el servicio de manicura', 'error')
       return
     }
+
+    // Validar que el servicio CABE en ese horario (punto 8)
+    const info = bookSlot.info
+    const startMin = toMin(bookSlot.time)
+    const endMin = startMin + duration
+    if (endMin > info.end) {
+      showToast(`El servicio de ${duration} min no cabe: supera el horario de cierre`, 'error')
+      return
+    }
+    if (info.lunchStart != null && overlaps(startMin, endMin, info.lunchStart, info.lunchEnd)) {
+      showToast(`El servicio de ${duration} min choca con el horario de almuerzo`, 'error')
+      return
+    }
+    if (info.busy.some((b: any) => overlaps(startMin, endMin, b.start, b.end))) {
+      showToast(`El servicio de ${duration} min choca con otra cita (dura hasta ${toHHMM(endMin)})`, 'error')
+      return
+    }
+
     setSavingBook(true)
     try {
-      const servicio = nailServices.find((s) => s.id === bookServiceId)
       await adminCreateAppointment(
         bookPatient,
         `${bookSlot.date}T${bookSlot.time}:00`,
         bookNotes || 'Agendada por administración',
         bookTipo === 'manicura'
-          ? { tipo: 'manicura', nail_service_id: bookServiceId, valor: servicio?.valor ?? null }
-          : { tipo: 'podologia' }
+          ? { tipo: 'manicura', nail_service_id: bookServiceId, valor: servicio?.valor ?? null, duration_minutes: duration }
+          : { tipo: 'podologia', duration_minutes: 60 }
       )
       showToast(bookTipo === 'manicura' ? 'Manicura agendada 💅' : 'Cita agendada')
       setBookSlot(null)
@@ -161,65 +157,83 @@ export default function AdminAgendaPage() {
       loadWeek(weekStart)
     } catch (err: any) {
       console.error(err)
-      showToast(
-        err?.code === '23505' ? 'Esa hora ya fue tomada' : 'Error agendando la cita',
-        'error'
-      )
+      showToast(err?.code === '23505' ? 'Esa hora ya fue tomada' : 'Error agendando la cita', 'error')
     } finally {
       setSavingBook(false)
     }
   }
 
   const blockedMap = new Map(blockouts.map((b: any) => [String(b.blocked_date), b.notes]))
-  const now = new Date()
 
-  // Días de la semana con sus entradas (citas + cupos libres)
+  // Construir cada día con su horario, almuerzo, citas y cupos libres
   const days = Array.from({ length: 7 }, (_, i) => {
     const date = new Date(weekStart)
     date.setDate(date.getDate() + i)
     const iso = toLocalIso(date)
-    const dayAppts = appointments.filter(
-      (a) => String(a.appointment_date).substring(0, 10) === iso
-    )
-    const config = availability.find((a: any) => a.day_of_week === date.getDay())
-    const slotTimes = genSlotTimes(config)
-    const apptTimes = new Set(dayAppts.map((a) => String(a.appointment_date).substring(11, 16)))
     const blocked = blockedMap.has(iso)
+    const config = availability.find((a: any) => a.day_of_week === date.getDay())
 
-    // Entradas: unión de cupos teóricos + citas fuera de horario, ordenadas
-    const allTimes = Array.from(
-      new Set([...slotTimes, ...dayAppts.map((a) => String(a.appointment_date).substring(11, 16))])
-    ).sort()
+    // Todas las citas del día (para mostrar), y las ACTIVAS (para ocupar)
+    const dayAppts = appointments
+      .filter((a) => String(a.appointment_date).substring(0, 10) === iso)
+      .filter((a) => filtro === 'todo' || a.tipo === filtro || (!a.tipo && filtro === 'podologia'))
+    const activas = appointments.filter(
+      (a) => String(a.appointment_date).substring(0, 10) === iso && a.status !== 'cancelled'
+    )
 
-    const entries = allTimes.map((time) => ({
-      time,
-      apt: dayAppts.find((a) => String(a.appointment_date).substring(11, 16) === time) ?? null,
-      isFree:
-        !apptTimes.has(time) &&
-        !blocked &&
-        slotTimes.includes(time) &&
-        (iso > todayIso || (iso === todayIso && new Date(`${iso}T${time}:00`) > now)),
-    }))
+    const start = config ? toMin(String(config.start_time).substring(0, 5)) : 0
+    const end = config ? toMin(String(config.end_time).substring(0, 5)) : 0
+    const lunchStart = config?.lunch_start ? toMin(String(config.lunch_start).substring(0, 5)) : null
+    const lunchEnd = config?.lunch_end ? toMin(String(config.lunch_end).substring(0, 5)) : null
+    const busy = activas.map((a) => {
+      const t = toMin(String(a.appointment_date).substring(11, 16))
+      return { start: t, end: t + (a.duration_minutes || 60) }
+    })
+    const info = { start, end, lunchStart, lunchEnd, busy }
+
+    // Grilla de cupos libres (bloques de 30 min genuinamente libres)
+    const now = new Date()
+    const nowMin = now.getHours() * 60 + now.getMinutes()
+    const isToday = iso === todayIso
+    const freeSlots: string[] = []
+    if (config && !blocked) {
+      for (let t = start; t + 30 <= end; t += 30) {
+        const cellEnd = t + 30
+        if (lunchStart != null && overlaps(t, cellEnd, lunchStart, lunchEnd!)) continue
+        if (busy.some((b) => overlaps(t, cellEnd, b.start, b.end))) continue
+        if (isToday && t <= nowMin) continue
+        freeSlots.push(toHHMM(t))
+      }
+    }
+
+    // Minutos libres del día (para KPI/alerta de capacidad)
+    const freeMin = freeSlots.length * 30
 
     return {
       name: DAY_NAMES[i],
       date,
       iso,
-      isToday: iso === todayIso,
+      isToday,
       blocked,
       blockNote: blockedMap.get(iso),
-      entries,
-      appointments: dayAppts,
+      config,
+      lunchStart,
+      lunchEnd,
+      info,
+      dayAppts,
+      activas,
+      freeSlots,
+      freeMin,
     }
   })
 
-  const todayCount = appointments.filter(
-    (a) => String(a.appointment_date).substring(0, 10) === todayIso && a.status === 'scheduled'
-  ).length
-  const weekCount = appointments.filter((a) => a.status !== 'cancelled').length
-  const completedCount = appointments.filter((a) => a.status === 'completed').length
+  // ===== KPIs =====
+  const weekAppts = appointments.filter((a) => a.status !== 'cancelled')
+  const podSemana = weekAppts.filter((a) => a.tipo !== 'manicura').length
+  const maniSemana = weekAppts.filter((a) => a.tipo === 'manicura').length
+  const todayFreeMin = days.find((d) => d.isToday)?.freeMin ?? null
+  const completadas = appointments.filter((a) => a.status === 'completed').length
 
-  // Filtro de pacientes en el modal
   const term = bookSearch.toLowerCase().trim()
   const filteredPatients = patients.filter(
     (p) =>
@@ -231,58 +245,64 @@ export default function AdminAgendaPage() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+      {/* Header + filtro */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <h1 className="font-display text-3xl text-tinta font-medium">
           Agenda <span className="italic">semanal</span>
         </h1>
-
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => changeWeek(-7)}
-            className="px-4 py-1.5 bg-marfil border border-arena rounded-full hover:bg-arena/50 font-semibold text-tinta transition"
-          >
-            ← Anterior
-          </button>
-          <button
-            onClick={() => setWeekStart(mondayOf(new Date()))}
-            className="px-4 py-1.5 bg-tinta text-marfil rounded-full hover:bg-tinta-suave font-semibold transition"
-          >
-            Hoy
-          </button>
-          <button
-            onClick={() => changeWeek(7)}
-            className="px-4 py-1.5 bg-marfil border border-arena rounded-full hover:bg-arena/50 font-semibold transition text-tinta"
-          >
-            Siguiente →
-          </button>
+          <button onClick={() => changeWeek(-7)} className="px-4 py-1.5 bg-marfil border border-arena rounded-full hover:bg-arena/50 font-semibold text-tinta transition">← Anterior</button>
+          <button onClick={() => setWeekStart(mondayOf(new Date()))} className="px-4 py-1.5 bg-tinta text-marfil rounded-full hover:bg-tinta-suave font-semibold transition">Hoy</button>
+          <button onClick={() => changeWeek(7)} className="px-4 py-1.5 bg-marfil border border-arena rounded-full hover:bg-arena/50 font-semibold transition text-tinta">Siguiente →</button>
         </div>
+      </div>
+
+      {/* Filtro por tipo */}
+      <div className="flex gap-1 bg-marfil rounded-full border border-arena shadow-sm p-1 w-fit mb-4">
+        {([['todo', '✨ Todo'], ['podologia', '🦶 Podología'], ['manicura', '💅 Manicura']] as const).map(
+          ([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setFiltro(key)}
+              className={`px-4 py-1.5 rounded-full text-sm font-bold transition ${
+                filtro === key
+                  ? key === 'manicura'
+                    ? 'bg-[#a37cc4] text-marfil'
+                    : 'bg-tinta text-marfil'
+                  : 'text-tinta-suave hover:bg-rosa-palo/40'
+              }`}
+            >
+              {label}
+            </button>
+          )
+        )}
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
-          <p className="text-sm text-gray-500">Citas pendientes hoy</p>
-          <p className="text-3xl font-bold text-tinta">{todayCount}</p>
+          <p className="text-sm text-gray-500">🦶 Podología (semana)</p>
+          <p className="text-3xl font-bold text-tinta">{podSemana}</p>
         </div>
         <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
-          <p className="text-sm text-gray-500">🕐 Horas libres hoy</p>
-          <p className="text-3xl font-bold text-salvia">{freeToday ?? '—'}</p>
+          <p className="text-sm text-gray-500">💅 Manicura (semana)</p>
+          <p className="text-3xl font-bold text-[#a37cc4]">{maniSemana}</p>
         </div>
         <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
-          <p className="text-sm text-gray-500">Citas esta semana</p>
-          <p className="text-3xl font-bold text-rosa">{weekCount}</p>
+          <p className="text-sm text-gray-500">🕐 Libre hoy</p>
+          <p className="text-3xl font-bold text-salvia">
+            {todayFreeMin == null ? '—' : `${Math.floor(todayFreeMin / 60)}h${todayFreeMin % 60 ? ' ' + (todayFreeMin % 60) + 'm' : ''}`}
+          </p>
         </div>
         <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
-          <p className="text-sm text-gray-500">Completadas esta semana</p>
-          <p className="text-3xl font-bold text-salvia">{completedCount}</p>
+          <p className="text-sm text-gray-500">✅ Completadas (semana)</p>
+          <p className="text-3xl font-bold text-salvia">{completadas}</p>
         </div>
       </div>
 
-      {/* Calendario semanal */}
       <p className="text-sm text-gray-500 mb-2">
-        Semana del {fmtShort(days[0].date)} al {fmtShort(days[6].date)} · Los cupos punteados
-        están libres: haz click para agendar
+        Semana del {fmtShort(days[0].date)} al {fmtShort(days[6].date)} · Los cupos punteados están
+        libres: haz click para agendar (podología 1h o manicura según servicio)
       </p>
 
       {loading ? (
@@ -291,316 +311,163 @@ export default function AdminAgendaPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3">
           {days.map((day) => {
             const isPast = day.iso < todayIso
-            // Atenuar días pasados y días inhábiles (sin horario de atención)
-            const isDimmed = isPast || (day.entries.length === 0 && !day.blocked)
+            const isDimmed = isPast || (!day.config && !day.blocked)
+            const pendientes = day.dayAppts.filter((a) => a.status === 'scheduled').length
             return (
-            <div
-              key={day.iso}
-              className={`bg-marfil rounded-2xl border shadow-sm min-h-32 ${
-                isDimmed ? 'opacity-50 grayscale' : ''
-              } ${
-                day.blocked
-                  ? 'border-rosa/50'
-                  : day.isToday
-                  ? 'border-arena ring-2 ring-tinta'
-                  : 'border-arena'
-              }`}
-            >
               <div
-                className={`px-3 py-2 border-b text-center rounded-t-2xl ${
-                  day.blocked
-                    ? 'bg-rosa/80 text-marfil'
-                    : day.isToday
-                    ? 'bg-tinta text-marfil'
-                    : 'bg-arena/50 text-tinta'
+                key={day.iso}
+                className={`bg-marfil rounded-2xl border shadow-sm min-h-32 ${isDimmed ? 'opacity-50 grayscale' : ''} ${
+                  day.blocked ? 'border-rosa/50' : day.isToday ? 'border-arena ring-2 ring-tinta' : 'border-arena'
                 }`}
               >
-                <p className={`text-xs font-semibold uppercase ${isPast ? 'line-through' : ''}`}>
-                  {day.name}
-                </p>
-                <p className={`text-sm font-bold ${isPast ? 'line-through' : ''}`}>
-                  {fmtShort(day.date)}
-                </p>
-                {(() => {
-                  const n = day.appointments.filter((a) => a.status === 'scheduled').length
-                  return n > 0 && !day.blocked && !isPast ? (
-                    <span
-                      className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        day.isToday ? 'bg-marfil/25 text-marfil' : 'bg-tinta/10 text-tinta'
-                      }`}
-                    >
-                      {n} cita{n > 1 ? 's' : ''}
+                <div className={`px-3 py-2 border-b text-center rounded-t-2xl ${day.blocked ? 'bg-rosa/80 text-marfil' : day.isToday ? 'bg-tinta text-marfil' : 'bg-arena/50 text-tinta'}`}>
+                  <p className={`text-xs font-semibold uppercase ${isPast ? 'line-through' : ''}`}>{day.name}</p>
+                  <p className={`text-sm font-bold ${isPast ? 'line-through' : ''}`}>{fmtShort(day.date)}</p>
+                  {pendientes > 0 && !day.blocked && !isPast && (
+                    <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${day.isToday ? 'bg-marfil/25 text-marfil' : 'bg-tinta/10 text-tinta'}`}>
+                      {pendientes} cita{pendientes > 1 ? 's' : ''}
                     </span>
-                  ) : null
-                })()}
-              </div>
+                  )}
+                </div>
 
-              <div className="p-2 space-y-1.5">
-                {/* Alerta de día bloqueado */}
-                {day.blocked && (
-                  <div className="bg-rosa-palo/60 border border-rosa/40 rounded-lg p-2 text-xs">
-                    <p className="font-bold text-rosa">🚫 Día bloqueado</p>
-                    {day.blockNote && <p className="text-tinta">{day.blockNote}</p>}
-                    {day.appointments.filter((a) => a.status === 'scheduled').length > 0 && (
-                      <p className="text-rosa font-semibold mt-1">
-                        ⚠️ {day.appointments.filter((a) => a.status === 'scheduled').length} cita(s)
-                        requieren reagendarse
-                      </p>
-                    )}
-                  </div>
-                )}
+                <div className="p-2 space-y-1.5">
+                  {day.blocked && (
+                    <div className="bg-rosa-palo/60 border border-rosa/40 rounded-lg p-2 text-xs">
+                      <p className="font-bold text-rosa">🚫 Día bloqueado</p>
+                      {day.blockNote && <p className="text-tinta">{day.blockNote}</p>}
+                      {day.activas.length > 0 && (
+                        <p className="text-rosa font-semibold mt-1">⚠️ {day.activas.length} cita(s) requieren reagendarse</p>
+                      )}
+                    </div>
+                  )}
 
-                {(() => {
-                  const visibles = day.entries.filter((e) => e.apt || e.isFree)
-                  if (visibles.length === 0 && !day.blocked) {
-                    return (
-                      <p className="text-xs text-gray-400 text-center py-3">
-                        {day.entries.length === 0
-                          ? 'Sin atención'
-                          : day.iso < todayIso
-                          ? 'Día pasado'
-                          : day.isToday
-                          ? 'Sin más cupos por hoy'
-                          : 'Sin cupos disponibles'}
-                      </p>
-                    )
-                  }
-                  return visibles.map(({ time, apt, isFree }) =>
-                    apt ? (
-                      <div
-                        key={time}
-                        className={`border-l-4 rounded-xl p-2 text-xs shadow-sm hover:shadow-md transition ${
-                          day.blocked && apt.status === 'scheduled'
-                            ? 'bg-rosa-palo/40 border-rosa text-tinta'
-                            : apt.tipo === 'manicura' && apt.status === 'scheduled'
-                            ? 'bg-[#f4eefa] border-[#a37cc4] text-tinta'
-                            : STATUS_STYLE[apt.status] || STATUS_STYLE.scheduled
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="font-bold">🕐 {time}</p>
-                          <span>
-                            {apt.tipo === 'manicura' ? '💅' : ''}
-                            {apt.status === 'completed' ? ' ✅' : ''}
-                          </span>
-                        </div>
-                        {apt.tipo === 'manicura' && apt.nail_services?.nombre && (
-                          <p className="text-[10px] font-bold text-[#7c5a99]">
-                            {apt.nail_services.nombre}
-                          </p>
-                        )}
-                        <Link
-                          href={`/admin/patients/${apt.patients?.id ?? ''}`}
-                          className="flex items-center gap-1.5 mt-1 hover:underline"
-                          title={apt.patients?.name}
+                  {!day.config && !day.blocked ? (
+                    <p className="text-xs text-gray-400 text-center py-3">{isPast ? 'Día pasado' : 'Sin atención'}</p>
+                  ) : (
+                    <>
+                      {/* Citas del día */}
+                      {day.dayAppts
+                        .slice()
+                        .sort((a, b) => String(a.appointment_date).localeCompare(String(b.appointment_date)))
+                        .map((apt) => {
+                          const t = String(apt.appointment_date).substring(11, 16)
+                          const endT = toHHMM(toMin(t) + (apt.duration_minutes || 60))
+                          const isMani = apt.tipo === 'manicura'
+                          return (
+                            <div
+                              key={apt.id}
+                              className={`border-l-4 rounded-xl p-2 text-xs shadow-sm hover:shadow-md transition ${
+                                day.blocked && apt.status === 'scheduled'
+                                  ? 'bg-rosa-palo/40 border-rosa text-tinta'
+                                  : isMani && apt.status === 'scheduled'
+                                  ? 'bg-[#f4eefa] border-[#a37cc4] text-tinta'
+                                  : STATUS_STYLE[apt.status] || STATUS_STYLE.scheduled
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <p className="font-bold">🕐 {t}–{endT}</p>
+                                <span>{isMani ? '💅' : ''}{apt.status === 'completed' ? ' ✅' : ''}</span>
+                              </div>
+                              {isMani && apt.nail_services?.nombre && (
+                                <p className="text-[10px] font-bold text-[#7c5a99]">{apt.nail_services.nombre}</p>
+                              )}
+                              <Link href={`/admin/patients/${apt.patients?.id ?? ''}`} className="flex items-center gap-1.5 mt-1 hover:underline" title={apt.patients?.name}>
+                                <span className={`w-5 h-5 rounded-full ${colorFor(apt.patients?.name)} text-marfil flex items-center justify-center text-[8px] font-bold shrink-0`}>{initials(apt.patients?.name)}</span>
+                                <span className="font-semibold truncate">{apt.patients?.name || 'Paciente'}</span>
+                              </Link>
+                              {day.blocked && apt.status === 'scheduled' && (
+                                <Link href={`/admin/patients/${apt.patients?.id ?? ''}`} className="block mt-1 text-center bg-rosa text-marfil rounded px-1 py-0.5 font-bold hover:opacity-90">🔄 Reagendar</Link>
+                              )}
+                              {!day.blocked && apt.status === 'scheduled' && (
+                                <div className="flex gap-1 mt-2">
+                                  <button onClick={() => setStatus(apt.id, 'completed')} className="flex-1 bg-salvia text-marfil rounded-full px-1 py-0.5 font-bold hover:opacity-90 transition" title="Completada">✓</button>
+                                  <button onClick={() => setCancelTarget(apt)} className="flex-1 bg-rosa text-marfil rounded-full px-1 py-0.5 font-bold hover:opacity-90 transition" title="Cancelar">✕</button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+
+                      {/* Cupos libres */}
+                      {day.freeSlots.map((time) => (
+                        <button
+                          key={time}
+                          onClick={() => setBookSlot({ date: day.iso, time, info: day.info })}
+                          className="w-full border border-dashed border-arena rounded p-1.5 text-xs text-gray-400 hover:border-tinta-suave hover:text-tinta hover:bg-rosa-palo/20 transition text-left"
+                          title="Agendar en este cupo"
                         >
-                          <span
-                            className={`w-5 h-5 rounded-full ${colorFor(apt.patients?.name)} text-marfil flex items-center justify-center text-[8px] font-bold shrink-0`}
-                          >
-                            {initials(apt.patients?.name)}
-                          </span>
-                          <span className="font-semibold truncate">
-                            {apt.patients?.name || 'Paciente'}
-                          </span>
-                        </Link>
-                        {apt.patients?.phone && (
-                          <p className="text-gray-500 mt-0.5">📞 {apt.patients.phone}</p>
-                        )}
-                        {day.blocked && apt.status === 'scheduled' && (
-                          <Link
-                            href={`/admin/patients/${apt.patients?.id ?? ''}`}
-                            className="block mt-1 text-center bg-rosa text-marfil rounded px-1 py-0.5 font-bold hover:opacity-90"
-                          >
-                            🔄 Reagendar
-                          </Link>
-                        )}
-                        {!day.blocked && apt.status === 'scheduled' && (
-                          <div className="flex gap-1 mt-2">
-                            <button
-                              onClick={() => setStatus(apt.id, 'completed')}
-                              className="flex-1 bg-salvia text-marfil rounded-full px-1 py-0.5 font-bold hover:opacity-90 transition"
-                              title="Marcar como completada"
-                            >
-                              ✓
-                            </button>
-                            <button
-                              onClick={() => setCancelTarget(apt)}
-                              className="flex-1 bg-rosa text-marfil rounded-full px-1 py-0.5 font-bold hover:opacity-90 transition"
-                              title="Cancelar cita"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ) : isFree ? (
-                      <button
-                        key={time}
-                        onClick={() => setBookSlot({ date: day.iso, time })}
-                        className="w-full border border-dashed border-arena rounded p-1.5 text-xs text-gray-400 hover:border-tinta-suave hover:text-tinta hover:bg-rosa-palo/20 transition text-left"
-                        title="Agendar en este cupo"
-                      >
-                        + {time} disponible
-                      </button>
-                    ) : null
-                  )
-                })()}
+                          + {time} disponible
+                        </button>
+                      ))}
+
+                      {day.config && day.freeSlots.length === 0 && day.dayAppts.length === 0 && !day.blocked && (
+                        <p className="text-xs text-gray-400 text-center py-3">{isPast ? 'Día pasado' : day.isToday ? 'Sin más cupos hoy' : 'Sin cupos'}</p>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
             )
           })}
         </div>
       )}
 
-      {/* ===== Modal: confirmar cancelación de cita ===== */}
+      {/* Modal cancelar */}
       {cancelTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4">
           <div className="bg-marfil rounded-3xl shadow-2xl border border-arena max-w-sm w-full p-8 text-center animate-fade-up">
-            <div className="w-16 h-16 mx-auto rounded-full bg-rosa-palo flex items-center justify-center text-3xl">
-              🕐
-            </div>
-            <h2 className="font-display text-2xl text-tinta font-medium mt-4">
-              ¿Cancelar la cita de <span className="italic">{cancelTarget.patients?.name}</span>?
-            </h2>
+            <div className="w-16 h-16 mx-auto rounded-full bg-rosa-palo flex items-center justify-center text-3xl">🕐</div>
+            <h2 className="font-display text-2xl text-tinta font-medium mt-4">¿Cancelar la cita de <span className="italic">{cancelTarget.patients?.name}</span>?</h2>
             <p className="mt-3 text-sm text-foreground/75">
-              {new Date(cancelTarget.appointment_date).toLocaleDateString('es-CL')} a las{' '}
-              {String(cancelTarget.appointment_date).substring(11, 16)} hrs — la hora quedará
-              liberada para otro paciente.
+              {new Date(cancelTarget.appointment_date).toLocaleDateString('es-CL')} a las {String(cancelTarget.appointment_date).substring(11, 16)} hrs — la hora quedará liberada para otro paciente.
             </p>
-            <button
-              onClick={() => {
-                setStatus(cancelTarget.id, 'cancelled')
-                setCancelTarget(null)
-              }}
-              className="mt-6 w-full bg-rosa text-marfil py-3 rounded-full font-bold hover:opacity-90 transition"
-            >
-              Sí, cancelar cita
-            </button>
-            <button
-              onClick={() => setCancelTarget(null)}
-              className="mt-3 w-full py-3 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition"
-            >
-              Volver
-            </button>
+            <button onClick={() => { setStatus(cancelTarget.id, 'cancelled'); setCancelTarget(null) }} className="mt-6 w-full bg-rosa text-marfil py-3 rounded-full font-bold hover:opacity-90 transition">Sí, cancelar cita</button>
+            <button onClick={() => setCancelTarget(null)} className="mt-3 w-full py-3 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition">Volver</button>
           </div>
         </div>
       )}
 
-      {/* ===== Modal: agendar desde un cupo libre ===== */}
+      {/* Modal agendar */}
       {bookSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4">
           <div className="bg-marfil rounded-3xl shadow-2xl border border-arena max-w-md w-full p-7 animate-fade-up max-h-[90vh] overflow-y-auto">
             <h2 className="font-display text-2xl text-tinta font-medium">
-              Agendar el{' '}
-              <span className="italic">
-                {new Date(bookSlot.date + 'T00:00:00').toLocaleDateString('es-CL', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                })}
-              </span>{' '}
-              a las {bookSlot.time}
+              Agendar el <span className="italic">{new Date(bookSlot.date + 'T00:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}</span> a las {bookSlot.time}
             </h2>
 
-            {/* Rama del servicio */}
             <div className="flex gap-2 mt-4">
-              <button
-                onClick={() => setBookTipo('podologia')}
-                className={`flex-1 py-2 rounded-full text-sm font-bold border transition ${
-                  bookTipo === 'podologia'
-                    ? 'bg-tinta text-marfil border-tinta'
-                    : 'bg-white text-tinta-suave border-arena hover:border-tinta-suave'
-                }`}
-              >
-                🦶 Podología
-              </button>
-              <button
-                onClick={() => setBookTipo('manicura')}
-                className={`flex-1 py-2 rounded-full text-sm font-bold border transition ${
-                  bookTipo === 'manicura'
-                    ? 'bg-[#a37cc4] text-marfil border-[#a37cc4]'
-                    : 'bg-white text-tinta-suave border-arena hover:border-[#a37cc4]'
-                }`}
-              >
-                💅 Manicura
-              </button>
+              <button onClick={() => setBookTipo('podologia')} className={`flex-1 py-2 rounded-full text-sm font-bold border transition ${bookTipo === 'podologia' ? 'bg-tinta text-marfil border-tinta' : 'bg-white text-tinta-suave border-arena hover:border-tinta-suave'}`}>🦶 Podología (1h)</button>
+              <button onClick={() => setBookTipo('manicura')} className={`flex-1 py-2 rounded-full text-sm font-bold border transition ${bookTipo === 'manicura' ? 'bg-[#a37cc4] text-marfil border-[#a37cc4]' : 'bg-white text-tinta-suave border-arena hover:border-[#a37cc4]'}`}>💅 Manicura</button>
             </div>
 
-            {/* Servicio de manicura */}
             {bookTipo === 'manicura' && (
-              <select
-                value={bookServiceId}
-                onChange={(e) => setBookServiceId(e.target.value)}
-                className="w-full mt-3 px-4 py-2 border border-[#a37cc4]/40 rounded-xl bg-[#f4eefa] text-sm font-semibold text-tinta focus:outline-none focus:ring-2 focus:ring-[#a37cc4]"
-              >
+              <select value={bookServiceId} onChange={(e) => setBookServiceId(e.target.value)} className="w-full mt-3 px-4 py-2 border border-[#a37cc4]/40 rounded-xl bg-[#f4eefa] text-sm font-semibold text-tinta focus:outline-none focus:ring-2 focus:ring-[#a37cc4]">
                 <option value="">— Elige el servicio —</option>
                 {nailServices.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nombre} — ${Number(s.valor).toLocaleString('es-CL')} ({s.duracion_minutes} min)
-                  </option>
+                  <option key={s.id} value={s.id}>{s.nombre} — ${Number(s.valor).toLocaleString('es-CL')} ({s.duracion_minutes} min)</option>
                 ))}
               </select>
             )}
 
-            <input
-              type="text"
-              value={bookSearch}
-              onChange={(e) => setBookSearch(e.target.value)}
-              placeholder="🔍 Buscar paciente por nombre, RUT o teléfono..."
-              className="w-full mt-4 px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave"
-            />
+            <input type="text" value={bookSearch} onChange={(e) => setBookSearch(e.target.value)} placeholder="🔍 Buscar paciente por nombre, RUT o teléfono..." className="w-full mt-4 px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
 
             <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
               {filteredPatients.length === 0 ? (
-                <p className="text-sm text-gray-400 p-3">
-                  No se encontró el paciente. Créalo primero en 👥 Pacientes.
-                </p>
+                <p className="text-sm text-gray-400 p-3">No se encontró el paciente. Créalo primero en 👥 Pacientes.</p>
               ) : (
                 filteredPatients.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setBookPatient(p.id)}
-                    className={`w-full text-left px-3 py-2 rounded-xl text-sm border transition ${
-                      bookPatient === p.id
-                        ? 'bg-tinta text-marfil border-tinta'
-                        : 'bg-white border-arena hover:border-tinta-suave'
-                    }`}
-                  >
+                  <button key={p.id} onClick={() => setBookPatient(p.id)} className={`w-full text-left px-3 py-2 rounded-xl text-sm border transition ${bookPatient === p.id ? 'bg-tinta text-marfil border-tinta' : 'bg-white border-arena hover:border-tinta-suave'}`}>
                     <span className="font-semibold">{p.name}</span>
-                    <span className={bookPatient === p.id ? 'text-marfil/70' : 'text-gray-400'}>
-                      {' '}
-                      · {p.rut || 'sin RUT'}
-                    </span>
+                    <span className={bookPatient === p.id ? 'text-marfil/70' : 'text-gray-400'}> · {p.rut || 'sin RUT'}</span>
                   </button>
                 ))
               )}
             </div>
 
-            <input
-              type="text"
-              value={bookNotes}
-              onChange={(e) => setBookNotes(e.target.value)}
-              placeholder="Notas (opcional)"
-              className="w-full mt-3 px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave"
-            />
+            <input type="text" value={bookNotes} onChange={(e) => setBookNotes(e.target.value)} placeholder="Notas (opcional)" className="w-full mt-3 px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
 
-            <button
-              onClick={confirmBook}
-              disabled={savingBook || !bookPatient}
-              className="mt-4 w-full bg-tinta text-marfil py-3 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50"
-            >
-              {savingBook ? 'Agendando...' : '✔ Confirmar cita'}
-            </button>
-            <button
-              onClick={() => {
-                setBookSlot(null)
-                setBookPatient('')
-                setBookSearch('')
-              }}
-              className="mt-2 w-full py-2.5 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition"
-            >
-              Cancelar
-            </button>
+            <button onClick={confirmBook} disabled={savingBook || !bookPatient} className="mt-4 w-full bg-tinta text-marfil py-3 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50">{savingBook ? 'Agendando...' : '✔ Confirmar cita'}</button>
+            <button onClick={() => { setBookSlot(null); setBookPatient(''); setBookSearch(''); setBookTipo('podologia'); setBookServiceId('') }} className="mt-2 w-full py-2.5 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition">Cancelar</button>
           </div>
         </div>
       )}

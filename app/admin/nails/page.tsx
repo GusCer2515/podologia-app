@@ -204,20 +204,33 @@ export default function NailsPage() {
   )
 }
 
-// Fila editable de servicio
+// Fila editable de servicio (nombre, valor y duración)
 function ServiceRow({ service, reload }: { service: any; reload: () => void }) {
+  const [nombre, setNombre] = useState(service.nombre ?? '')
   const [valor, setValor] = useState(String(service.valor ?? 0))
+  const [duracion, setDuracion] = useState(String(service.duracion_minutes ?? 60))
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const changed = valor !== String(service.valor ?? 0)
+  const changed =
+    nombre !== (service.nombre ?? '') ||
+    valor !== String(service.valor ?? 0) ||
+    duracion !== String(service.duracion_minutes ?? 60)
 
   const save = async () => {
     const v = parseInt(valor, 10)
+    if (!nombre.trim()) {
+      showToast('El nombre no puede quedar vacío', 'error')
+      return
+    }
     if (isNaN(v) || v < 0) {
       showToast('Valor inválido', 'error')
       return
     }
     try {
-      await updateNailService(service.id, { valor: v })
+      await updateNailService(service.id, {
+        nombre: nombre.trim(),
+        valor: v,
+        duracion_minutes: parseInt(duracion, 10) || 60,
+      })
       showToast('Servicio actualizado')
       reload()
     } catch {
@@ -248,7 +261,16 @@ function ServiceRow({ service, reload }: { service: any; reload: () => void }) {
 
   return (
     <tr className={`border-t border-arena/60 ${!service.is_active ? 'opacity-50' : ''}`}>
-      <td className="px-4 py-2 font-semibold text-tinta">💅 {service.nombre}</td>
+      <td className="px-4 py-2">
+        <div className="flex items-center gap-1.5">
+          <span>💅</span>
+          <input
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            className="w-48 px-3 py-1.5 border border-arena rounded-xl bg-white text-sm font-semibold text-tinta focus:outline-none focus:ring-2 focus:ring-tinta-suave"
+          />
+        </div>
+      </td>
       <td className="px-4 py-2">
         <div className="flex items-center gap-1">
           <span className="text-tinta font-bold">$</span>
@@ -260,18 +282,30 @@ function ServiceRow({ service, reload }: { service: any; reload: () => void }) {
             onChange={(e) => setValor(e.target.value)}
             className="w-28 px-3 py-1.5 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave"
           />
-          {changed && (
-            <button
-              onClick={save}
-              className="ml-2 bg-salvia text-marfil px-4 py-1 rounded-full text-xs font-bold hover:opacity-90 transition"
-            >
-              Guardar
-            </button>
-          )}
         </div>
       </td>
-      <td className="px-4 py-2 text-gray-600">{service.duracion_minutes} min</td>
+      <td className="px-4 py-2">
+        <select
+          value={duracion}
+          onChange={(e) => setDuracion(e.target.value)}
+          className="px-3 py-1.5 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave"
+        >
+          <option value="30">30 min</option>
+          <option value="60">60 min</option>
+          <option value="90">90 min</option>
+          <option value="120">120 min</option>
+          <option value="150">150 min</option>
+        </select>
+      </td>
       <td className="px-4 py-2 text-right whitespace-nowrap">
+        {changed && (
+          <button
+            onClick={save}
+            className="bg-salvia text-marfil px-4 py-1 rounded-full text-xs font-bold hover:opacity-90 transition mr-2"
+          >
+            Guardar
+          </button>
+        )}
         <button
           onClick={toggle}
           className="bg-arena text-tinta px-3 py-1 rounded-full text-xs font-bold hover:bg-arena/70 transition mr-2"

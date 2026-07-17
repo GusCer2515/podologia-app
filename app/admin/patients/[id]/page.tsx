@@ -50,6 +50,7 @@ export default function PatientDetailPage() {
   const [form, setForm] = useState<any>({})
   // Agendador admin: false = cerrado, null = nueva cita, objeto = reagendar esa cita
   const [scheduler, setScheduler] = useState<any>(false)
+  const [citasFiltro, setCitasFiltro] = useState<'todo' | 'podologia' | 'manicura'>('todo')
 
   const reloadAppointments = () => {
     getPatientAppointments(patientId)
@@ -247,13 +248,36 @@ export default function PatientDetailPage() {
       {tab === 'citas' && (
         <div className="space-y-4 max-w-3xl">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-bold text-gray-800">📅 Citas ({appointments.length})</h2>
+            <h2 className="font-display text-2xl text-tinta font-semibold">
+              📅 Citas ({appointments.filter((a) => citasFiltro === 'todo' || (a.tipo ?? 'podologia') === citasFiltro).length})
+            </h2>
             <button
               onClick={() => setScheduler(scheduler === null ? false : null)}
               className="bg-tinta text-marfil px-4 py-2 rounded-full font-bold hover:bg-tinta-suave transition"
             >
               {scheduler === null ? 'Cancelar' : '+ Agendar cita'}
             </button>
+          </div>
+
+          {/* Filtro por tipo */}
+          <div className="flex gap-1 bg-marfil rounded-full border border-arena shadow-sm p-1 w-fit">
+            {([['todo', 'Todas'], ['podologia', '🦶 Podología'], ['manicura', '💅 Manicura']] as const).map(
+              ([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setCitasFiltro(key)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold transition ${
+                    citasFiltro === key
+                      ? key === 'manicura'
+                        ? 'bg-[#a37cc4] text-marfil'
+                        : 'bg-tinta text-marfil'
+                      : 'text-tinta-suave hover:bg-rosa-palo/40'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            )}
           </div>
 
           {/* Agendador admin (nueva cita o reagendamiento) */}
@@ -269,60 +293,59 @@ export default function PatientDetailPage() {
             />
           )}
 
-          <div className="bg-marfil rounded-2xl border border-arena shadow-sm overflow-x-auto">
-            {appointments.length === 0 ? (
-              <p className="text-gray-500 py-8 text-center">Este paciente no tiene citas</p>
-            ) : (
-              <table className="w-full">
-                <thead className="bg-arena/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Fecha</th>
-                    <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Hora</th>
-                    <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Estado</th>
-                    <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Notas</th>
-                    <th className="px-4 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {appointments.map((a) => (
-                    <tr key={a.id} className="border-t border-arena/60 hover:bg-rosa-palo/20">
-                      <td className="px-4 py-3 text-sm">
-                        {new Date(a.appointment_date).toLocaleDateString('es-CL')}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {String(a.appointment_date).substring(11, 16)}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            a.status === 'scheduled'
-                              ? 'bg-blue-100 text-blue-800'
-                              : a.status === 'completed'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {STATUS_LABEL[a.status] || a.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{a.notes || '—'}</td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        {(a.status === 'scheduled' || a.status === 'cancelled') && (
-                          <button
-                            onClick={() => setScheduler(a)}
-                            className="bg-rosa-palo/60 text-tinta px-3 py-1 rounded-full text-xs font-bold hover:bg-rosa-palo transition"
-                            title={a.status === 'cancelled' ? 'Volver a agendar esta cita' : 'Cambiar fecha/hora'}
-                          >
-                            🔄 Reagendar
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {(() => {
+            const filtradas = appointments.filter(
+              (a) => citasFiltro === 'todo' || (a.tipo ?? 'podologia') === citasFiltro
+            )
+            return (
+              <div className="bg-marfil rounded-2xl border border-arena shadow-sm overflow-x-auto">
+                {filtradas.length === 0 ? (
+                  <p className="text-gray-500 py-8 text-center">Sin citas con ese filtro</p>
+                ) : (
+                  <table className="w-full">
+                    <thead className="bg-arena/50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Fecha</th>
+                        <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Hora</th>
+                        <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Tipo</th>
+                        <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Estado</th>
+                        <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Notas</th>
+                        <th className="px-4 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtradas.map((a) => (
+                        <tr key={a.id} className="border-t border-arena/60 hover:bg-rosa-palo/20">
+                          <td className="px-4 py-3 text-sm">{new Date(a.appointment_date).toLocaleDateString('es-CL')}</td>
+                          <td className="px-4 py-3 text-sm">{String(a.appointment_date).substring(11, 16)}</td>
+                          <td className="px-4 py-3 text-sm">
+                            {a.tipo === 'manicura' ? (
+                              <span className="px-2 py-1 rounded-full text-xs font-bold bg-[#a37cc4]/15 text-[#7c5a99]">
+                                💅 {a.nail_services?.nombre || 'Manicura'}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 rounded-full text-xs font-bold bg-tinta/10 text-tinta">🦶 Podología</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${a.status === 'scheduled' ? 'bg-blue-100 text-blue-800' : a.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              {STATUS_LABEL[a.status] || a.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{a.notes || '—'}</td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            {(a.status === 'scheduled' || a.status === 'cancelled') && (
+                              <button onClick={() => setScheduler(a)} className="bg-rosa-palo/60 text-tinta px-3 py-1 rounded-full text-xs font-bold hover:bg-rosa-palo transition" title={a.status === 'cancelled' ? 'Volver a agendar' : 'Cambiar fecha/hora'}>🔄 Reagendar</button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )
+          })()}
         </div>
       )}
 
