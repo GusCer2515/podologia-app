@@ -9,6 +9,7 @@ import {
   getAvailability,
   getPatients,
   adminCreateAppointment,
+  getNailServices,
 } from '@/lib/supabase'
 import { getAvailableSlots, todayLocalStr } from '@/lib/slots'
 import { initials, colorFor } from '@/lib/avatar'
@@ -68,6 +69,10 @@ export default function AdminAgendaPage() {
   const [bookSearch, setBookSearch] = useState('')
   const [bookNotes, setBookNotes] = useState('')
   const [savingBook, setSavingBook] = useState(false)
+  // Rama de la cita: podología (por defecto) o manicura
+  const [bookTipo, setBookTipo] = useState<'podologia' | 'manicura'>('podologia')
+  const [bookServiceId, setBookServiceId] = useState('')
+  const [nailServices, setNailServices] = useState<any[]>([])
   // Modal de confirmación al cancelar una cita
   const [cancelTarget, setCancelTarget] = useState<any>(null)
 
@@ -105,6 +110,9 @@ export default function AdminAgendaPage() {
     getPatients()
       .then((p) => setPatients(p || []))
       .catch(() => {})
+    getNailServices(true)
+      .then((s) => setNailServices(s || []))
+      .catch(() => {})
   }, [])
 
   const changeWeek = (deltaDays: number) => {
@@ -128,18 +136,28 @@ export default function AdminAgendaPage() {
       showToast('Selecciona el paciente', 'error')
       return
     }
+    if (bookTipo === 'manicura' && !bookServiceId) {
+      showToast('Selecciona el servicio de manicura', 'error')
+      return
+    }
     setSavingBook(true)
     try {
+      const servicio = nailServices.find((s) => s.id === bookServiceId)
       await adminCreateAppointment(
         bookPatient,
         `${bookSlot.date}T${bookSlot.time}:00`,
-        bookNotes || 'Agendada por administración'
+        bookNotes || 'Agendada por administración',
+        bookTipo === 'manicura'
+          ? { tipo: 'manicura', nail_service_id: bookServiceId, valor: servicio?.valor ?? null }
+          : { tipo: 'podologia' }
       )
-      showToast('Cita agendada')
+      showToast(bookTipo === 'manicura' ? 'Manicura agendada 💅' : 'Cita agendada')
       setBookSlot(null)
       setBookPatient('')
       setBookSearch('')
       setBookNotes('')
+      setBookTipo('podologia')
+      setBookServiceId('')
       loadWeek(weekStart)
     } catch (err: any) {
       console.error(err)
@@ -354,13 +372,23 @@ export default function AdminAgendaPage() {
                         className={`border-l-4 rounded-xl p-2 text-xs shadow-sm hover:shadow-md transition ${
                           day.blocked && apt.status === 'scheduled'
                             ? 'bg-rosa-palo/40 border-rosa text-tinta'
+                            : apt.tipo === 'manicura' && apt.status === 'scheduled'
+                            ? 'bg-[#f4eefa] border-[#a37cc4] text-tinta'
                             : STATUS_STYLE[apt.status] || STATUS_STYLE.scheduled
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <p className="font-bold">🕐 {time}</p>
-                          {apt.status === 'completed' && <span title="Completada">✅</span>}
+                          <span>
+                            {apt.tipo === 'manicura' ? '💅' : ''}
+                            {apt.status === 'completed' ? ' ✅' : ''}
+                          </span>
                         </div>
+                        {apt.tipo === 'manicura' && apt.nail_services?.nombre && (
+                          <p className="text-[10px] font-bold text-[#7c5a99]">
+                            {apt.nail_services.nombre}
+                          </p>
+                        )}
                         <Link
                           href={`/admin/patients/${apt.patients?.id ?? ''}`}
                           className="flex items-center gap-1.5 mt-1 hover:underline"
@@ -473,6 +501,46 @@ export default function AdminAgendaPage() {
               </span>{' '}
               a las {bookSlot.time}
             </h2>
+
+            {/* Rama del servicio */}
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setBookTipo('podologia')}
+                className={`flex-1 py-2 rounded-full text-sm font-bold border transition ${
+                  bookTipo === 'podologia'
+                    ? 'bg-tinta text-marfil border-tinta'
+                    : 'bg-white text-tinta-suave border-arena hover:border-tinta-suave'
+                }`}
+              >
+                🦶 Podología
+              </button>
+              <button
+                onClick={() => setBookTipo('manicura')}
+                className={`flex-1 py-2 rounded-full text-sm font-bold border transition ${
+                  bookTipo === 'manicura'
+                    ? 'bg-[#a37cc4] text-marfil border-[#a37cc4]'
+                    : 'bg-white text-tinta-suave border-arena hover:border-[#a37cc4]'
+                }`}
+              >
+                💅 Manicura
+              </button>
+            </div>
+
+            {/* Servicio de manicura */}
+            {bookTipo === 'manicura' && (
+              <select
+                value={bookServiceId}
+                onChange={(e) => setBookServiceId(e.target.value)}
+                className="w-full mt-3 px-4 py-2 border border-[#a37cc4]/40 rounded-xl bg-[#f4eefa] text-sm font-semibold text-tinta focus:outline-none focus:ring-2 focus:ring-[#a37cc4]"
+              >
+                <option value="">— Elige el servicio —</option>
+                {nailServices.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre} — ${Number(s.valor).toLocaleString('es-CL')} ({s.duracion_minutes} min)
+                  </option>
+                ))}
+              </select>
+            )}
 
             <input
               type="text"

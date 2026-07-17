@@ -33,6 +33,9 @@ export default function FinancePage() {
   const [convenios, setConvenios] = useState<any[]>([])
   const [precioParticular, setPrecioParticular] = useState(30000)
   const [loading, setLoading] = useState(true)
+  // Rama del negocio: todo | podologia | manicura
+  const [rama, setRama] = useState<'todo' | 'podologia' | 'manicura'>('todo')
+  const [monthAppts, setMonthAppts] = useState<any[]>([])
   // Registro de conciliaciones: filtros
   const [filtroConc, setFiltroConc] = useState<'todas' | 'conciliadas' | 'pendientes'>('todas')
   const [buscarConc, setBuscarConc] = useState('')
@@ -47,6 +50,7 @@ export default function FinancePage() {
       getSetting('precio_particular').catch(() => null),
     ])
     setAttentions(atts ?? [])
+    setMonthAppts(appts ?? [])
     setScheduled((appts ?? []).filter((a: any) => a.status === 'scheduled'))
     setConvenios(convs ?? [])
     if (precio) setPrecioParticular(parseInt(precio, 10) || 30000)
@@ -68,9 +72,25 @@ export default function FinancePage() {
 
   const valorAtencion = (a: any): number => a.valor ?? valueFor(a.patients?.insurance)
 
-  // ===== Cálculos =====
-  const ingresoReal = attentions.reduce((sum, a) => sum + valorAtencion(a), 0)
-  const proyeccion = scheduled.reduce((sum, a) => sum + valueFor(a.patients?.insurance), 0)
+  // ===== Cálculos por rama =====
+  // Podología: realizado = atenciones registradas; proyección = citas agendadas
+  const podRealizado = attentions.reduce((sum, a) => sum + valorAtencion(a), 0)
+  const podProyeccion = scheduled
+    .filter((a) => a.tipo !== 'manicura')
+    .reduce((sum, a) => sum + valueFor(a.patients?.insurance), 0)
+  // Manicura: realizado = citas completadas; proyección = agendadas (valor del servicio)
+  const manicuras = monthAppts.filter((a) => a.tipo === 'manicura')
+  const maniRealizado = manicuras
+    .filter((a) => a.status === 'completed')
+    .reduce((sum, a) => sum + (a.valor ?? 0), 0)
+  const maniProyeccion = manicuras
+    .filter((a) => a.status === 'scheduled')
+    .reduce((sum, a) => sum + (a.valor ?? 0), 0)
+
+  const ingresoReal =
+    rama === 'todo' ? podRealizado + maniRealizado : rama === 'podologia' ? podRealizado : maniRealizado
+  const proyeccion =
+    rama === 'todo' ? podProyeccion + maniProyeccion : rama === 'podologia' ? podProyeccion : maniProyeccion
 
   // Desglose por convenio: SIEMPRE se muestran todos los convenios
   // registrados + la fila PARTICULAR (con su valor unitario configurado)
@@ -97,15 +117,39 @@ export default function FinancePage() {
         <h1 className="font-display text-3xl text-tinta font-medium">
           Finanzas <span className="italic">e ingresos</span>
         </h1>
-        <label className="text-sm text-gray-500">
-          Mes:{' '}
-          <input
-            type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="px-3 py-1.5 border border-arena rounded-xl bg-marfil text-sm text-tinta font-semibold focus:outline-none focus:ring-2 focus:ring-tinta-suave"
-          />
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Switch de rama */}
+          <div className="flex gap-1 bg-marfil rounded-full border border-arena shadow-sm p-1">
+            {([
+              ['todo', '✨ Todo'],
+              ['podologia', '🦶 Podología'],
+              ['manicura', '💅 Manicura'],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setRama(key)}
+                className={`px-4 py-1.5 rounded-full text-sm font-bold transition ${
+                  rama === key
+                    ? key === 'manicura'
+                      ? 'bg-[#a37cc4] text-marfil'
+                      : 'bg-tinta text-marfil'
+                    : 'text-tinta-suave hover:bg-rosa-palo/40'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className="text-sm text-gray-500">
+            Mes:{' '}
+            <input
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="px-3 py-1.5 border border-arena rounded-xl bg-marfil text-sm text-tinta font-semibold focus:outline-none focus:ring-2 focus:ring-tinta-suave"
+            />
+          </label>
+        </div>
       </div>
 
       {loading ? (
@@ -117,12 +161,22 @@ export default function FinancePage() {
             <div className="bg-marfil p-5 rounded-2xl border border-arena shadow-sm">
               <p className="text-sm text-gray-500">💵 Ingresos realizados ({nombreMes})</p>
               <p className="text-3xl font-bold text-salvia mt-1">{fmtCLP(ingresoReal)}</p>
-              <p className="text-xs text-gray-400 mt-1">{attentions.length} atenciones registradas</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {rama !== 'manicura' && `${attentions.length} atenciones podología`}
+                {rama === 'todo' && ' · '}
+                {rama !== 'podologia' &&
+                  `${manicuras.filter((a) => a.status === 'completed').length} manicuras`}
+              </p>
             </div>
             <div className="bg-marfil p-5 rounded-2xl border border-arena shadow-sm">
               <p className="text-sm text-gray-500">📅 Proyección (citas agendadas)</p>
               <p className="text-3xl font-bold text-tinta mt-1">{fmtCLP(proyeccion)}</p>
-              <p className="text-xs text-gray-400 mt-1">{scheduled.length} citas pendientes del mes</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {rama !== 'manicura' && `${scheduled.filter((a) => a.tipo !== 'manicura').length} podología`}
+                {rama === 'todo' && ' · '}
+                {rama !== 'podologia' &&
+                  `${scheduled.filter((a) => a.tipo === 'manicura').length} manicura`}
+              </p>
             </div>
             <div className="bg-tinta p-5 rounded-2xl shadow-sm">
               <p className="text-sm text-marfil/70">📈 Total estimado del mes</p>
@@ -131,10 +185,79 @@ export default function FinancePage() {
             </div>
           </div>
 
+          {/* ===== 💅 Manicura: ingresos por servicio ===== */}
+          {rama !== 'podologia' && (
+            <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
+              <h2 className="font-display text-2xl text-tinta font-semibold mb-4">
+                💅 Manicura — ingresos por servicio
+              </h2>
+              {manicuras.length === 0 ? (
+                <p className="text-sm text-gray-400">
+                  Sin manicuras este mes. Agenda desde 📅 Agenda eligiendo tipo 💅 Manicura.
+                </p>
+              ) : (
+                (() => {
+                  const g: Record<string, { realizadas: number; total: number; agendadas: number; proy: number }> = {}
+                  for (const a of manicuras) {
+                    const key = a.nail_services?.nombre || 'Servicio'
+                    if (!g[key]) g[key] = { realizadas: 0, total: 0, agendadas: 0, proy: 0 }
+                    if (a.status === 'completed') {
+                      g[key].realizadas++
+                      g[key].total += a.valor ?? 0
+                    }
+                    if (a.status === 'scheduled') {
+                      g[key].agendadas++
+                      g[key].proy += a.valor ?? 0
+                    }
+                  }
+                  return (
+                    <div className="bg-white rounded-xl border border-arena overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-arena/50">
+                          <tr>
+                            <th className="px-4 py-2.5 text-left font-bold text-tinta">Servicio</th>
+                            <th className="px-4 py-2.5 text-right font-bold text-tinta">Realizadas</th>
+                            <th className="px-4 py-2.5 text-right font-bold text-tinta">Ingresos</th>
+                            <th className="px-4 py-2.5 text-right font-bold text-tinta">Agendadas</th>
+                            <th className="px-4 py-2.5 text-right font-bold text-tinta">Proyección</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(g).map(([nombre, x]) => (
+                            <tr key={nombre} className="border-t border-arena/60">
+                              <td className="px-4 py-2.5 font-semibold text-tinta">💅 {nombre}</td>
+                              <td className="px-4 py-2.5 text-right">{x.realizadas}</td>
+                              <td className="px-4 py-2.5 text-right font-bold text-salvia">{fmtCLP(x.total)}</td>
+                              <td className="px-4 py-2.5 text-right">{x.agendadas}</td>
+                              <td className="px-4 py-2.5 text-right font-bold text-[#a37cc4]">{fmtCLP(x.proy)}</td>
+                            </tr>
+                          ))}
+                          <tr className="border-t-2 border-tinta/20 bg-arena/30">
+                            <td className="px-4 py-2.5 font-bold text-tinta">TOTAL</td>
+                            <td className="px-4 py-2.5 text-right font-bold">
+                              {manicuras.filter((a) => a.status === 'completed').length}
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-bold text-tinta">{fmtCLP(maniRealizado)}</td>
+                            <td className="px-4 py-2.5 text-right font-bold">
+                              {manicuras.filter((a) => a.status === 'scheduled').length}
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-bold text-tinta">{fmtCLP(maniProyeccion)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                })()
+              )}
+            </section>
+          )}
+
+          {rama !== 'manicura' && (
+            <>
           {/* ===== Desglose por convenio ===== */}
           <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
             <h2 className="font-display text-2xl text-tinta font-semibold mb-4">
-              🤝 Ingresos por convenio
+              🤝 Podología — ingresos por convenio
             </h2>
             {attentions.length === 0 && convenios.length === 0 ? (
               <p className="text-sm text-gray-400">
@@ -347,6 +470,8 @@ export default function FinancePage() {
 
           {/* ===== Conciliación bancaria ===== */}
           <Conciliacion />
+            </>
+          )}
         </div>
       )}
     </div>

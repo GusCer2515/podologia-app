@@ -10,8 +10,10 @@ import { Toaster } from '@/components/toast'
 const NAV_ITEMS = [
   { href: '/admin', label: '📅 Agenda' },
   { href: '/admin/patients', label: '👥 Pacientes' },
+  { href: '/admin/nails', label: '💅 Nails' },
   { href: '/admin/finance', label: '💰 Finanzas' },
   { href: '/admin/content', label: '🖼 Contenido' },
+  { href: '/admin/social', label: '📱 Redes' },
   { href: '/admin/settings', label: '⚙️ Configuración' },
 ]
 

@@ -430,7 +430,7 @@ export async function getDocumentSignedUrl(path: string) {
 export async function getAppointmentsBetween(startIso: string, endIso: string) {
   const { data, error } = await supabase
     .from('appointments')
-    .select('*, patients(id, name, phone, insurance)')
+    .select('*, patients(id, name, phone, insurance), nail_services(nombre)')
     .gte('appointment_date', startIso)
     .lt('appointment_date', endIso)
     .order('appointment_date', { ascending: true })
@@ -457,10 +457,76 @@ export async function updateAttention(id: string, fields: any) {
 }
 
 // El admin agenda directamente (el índice único de la BD evita duplicados)
-export async function adminCreateAppointment(patientId: string, datetime: string, notes?: string) {
+// extra: tipo ('podologia' | 'manicura'), nail_service_id y valor para citas de manicura
+export async function adminCreateAppointment(
+  patientId: string,
+  datetime: string,
+  notes?: string,
+  extra?: { tipo?: string; nail_service_id?: string | null; valor?: number | null }
+) {
   const { error } = await supabase
     .from('appointments')
-    .insert([{ patient_id: patientId, appointment_date: datetime, notes: notes || null }])
+    .insert([{ patient_id: patientId, appointment_date: datetime, notes: notes || null, ...extra }])
+  if (error) throw error
+}
+
+// ============================================================
+// SERVICIOS DE MANICURA (Nails)
+// ============================================================
+
+export async function getNailServices(soloActivos = false) {
+  let query = supabase.from('nail_services').select('*').order('nombre', { ascending: true })
+  if (soloActivos) query = query.eq('is_active', true)
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+export async function addNailService(payload: any) {
+  const { error } = await supabase.from('nail_services').insert([payload])
+  if (error) throw error
+}
+
+export async function updateNailService(id: string, fields: any) {
+  const { error } = await supabase.from('nail_services').update(fields).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteNailService(id: string) {
+  const { error } = await supabase.from('nail_services').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ============================================================
+// CALENDARIO DE CONTENIDO (Instagram)
+// ============================================================
+
+export async function getContentPlan(startDate: string, endDate: string) {
+  const { data, error } = await supabase
+    .from('content_plan')
+    .select('*')
+    .gte('fecha', startDate)
+    .lte('fecha', endDate)
+    .order('fecha', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createContentPost(payload: any) {
+  const { error } = await supabase.from('content_plan').insert([payload])
+  if (error) throw error
+}
+
+export async function updateContentPost(id: string, fields: any) {
+  const { error } = await supabase
+    .from('content_plan')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteContentPost(id: string) {
+  const { error } = await supabase.from('content_plan').delete().eq('id', id)
   if (error) throw error
 }
 
