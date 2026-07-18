@@ -47,6 +47,8 @@ export default function DocumentsTab({ patient }: { patient: any }) {
   const [clinic, setClinic] = useState<ClinicInfo>(CLINIC)
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
   const [deleting, setDeleting] = useState(false)
+  // Visor de PDF interno (usa una copia local del archivo para poder imprimir)
+  const [viewer, setViewer] = useState<{ doc: any; url: string } | null>(null)
 
   const load = useCallback(() => {
     getDocuments(patient.id)
@@ -136,11 +138,17 @@ export default function DocumentsTab({ patient }: { patient: any }) {
     }
   }
 
+  // Abre el PDF en un visor dentro del panel. Se descarga como blob local
+  // para que Imprimir y Descargar funcionen sin bloqueos del navegador.
   const openPdf = async (doc: any) => {
     setWorking(doc.id)
     try {
-      const url = await getDocumentSignedUrl(doc.pdf_url)
-      window.open(url, '_blank')
+      const signed = await getDocumentSignedUrl(doc.pdf_url)
+      const res = await fetch(signed)
+      if (!res.ok) throw new Error('No se pudo descargar el PDF')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      setViewer({ doc, url })
     } catch (err) {
       showToast('Error abriendo el PDF', 'error')
       console.error(err)
@@ -148,6 +156,24 @@ export default function DocumentsTab({ patient }: { patient: any }) {
       setWorking(null)
     }
   }
+
+  const cerrarVisor = () => {
+    if (viewer?.url) URL.revokeObjectURL(viewer.url)
+    setViewer(null)
+  }
+
+  const imprimir = () => {
+    const frame = document.getElementById('pdf-frame') as HTMLIFrameElement | null
+    try {
+      frame?.contentWindow?.focus()
+      frame?.contentWindow?.print()
+    } catch {
+      showToast('Usa el botón de imprimir del visor', 'error')
+    }
+  }
+
+  const nombreArchivo = (doc: any) =>
+    `${doc.tipo === 'receta' ? 'Receta' : 'Indicaciones'}-${patient.name?.replace(/\s+/g, '-')}-${new Date(doc.created_at).toLocaleDateString('es-CL').replace(/\//g, '-')}.pdf`
 
   const sendWhatsApp = async (doc: any) => {
     setWorking(doc.id)
@@ -298,6 +324,57 @@ export default function DocumentsTab({ patient }: { patient: any }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ===== Visor de PDF interno ===== */}
+      {viewer && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-tinta/70 backdrop-blur-sm p-3 sm:p-6">
+          <div className="bg-marfil rounded-3xl shadow-2xl border border-arena w-full max-w-4xl mx-auto flex flex-col flex-1 overflow-hidden">
+            {/* Barra superior */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-arena bg-marfil">
+              <div>
+                <p className="font-display text-xl text-tinta font-semibold">
+                  {viewer.doc.tipo === 'receta' ? '💊 Receta' : '📋 Indicaciones'}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {patient.name} ·{' '}
+                  {new Date(viewer.doc.created_at).toLocaleDateString('es-CL')}
+                  {viewer.doc.diagnostico ? ` · ${viewer.doc.diagnostico}` : ''}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={imprimir}
+                  className="bg-tinta text-marfil px-4 py-1.5 rounded-full text-sm font-bold hover:bg-tinta-suave transition"
+                >
+                  🖨 Imprimir
+                </button>
+                <a
+                  href={viewer.url}
+                  download={nombreArchivo(viewer.doc)}
+                  className="bg-salvia text-marfil px-4 py-1.5 rounded-full text-sm font-bold hover:opacity-90 transition"
+                >
+                  ⬇ Descargar
+                </a>
+                <button
+                  onClick={cerrarVisor}
+                  className="w-9 h-9 rounded-full border border-arena text-tinta hover:bg-arena/50 transition"
+                  aria-label="Cerrar"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* PDF */}
+            <iframe
+              id="pdf-frame"
+              src={viewer.url}
+              title="Documento"
+              className="flex-1 w-full bg-white"
+            />
+          </div>
         </div>
       )}
 

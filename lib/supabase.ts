@@ -520,6 +520,11 @@ export async function updateAttention(id: string, fields: any) {
   if (error) throw error
 }
 
+export async function deleteAttention(id: string) {
+  const { error } = await supabase.from('attentions').delete().eq('id', id)
+  if (error) throw error
+}
+
 // El admin agenda directamente (el índice único de la BD evita duplicados)
 // extra: tipo ('podologia' | 'manicura'), nail_service_id y valor para citas de manicura
 export async function adminCreateAppointment(

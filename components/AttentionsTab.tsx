@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { getAttentions, createAttention, getConvenios, getSetting } from '@/lib/supabase'
+import { getAttentions, createAttention, deleteAttention, getConvenios, getSetting } from '@/lib/supabase'
 import { showToast } from '@/components/toast'
 import { SelectField, TextField, TextAreaField, FormSection } from '@/components/fields'
 
@@ -42,6 +42,8 @@ export default function AttentionsTab({ patient }: { patient: any }) {
   const [form, setForm] = useState<any>({ fecha: todayLocal() })
   const [expanded, setExpanded] = useState<string | null>(null)
   const [valorDefecto, setValorDefecto] = useState<number>(30000)
+  const [deleteTarget, setDeleteTarget] = useState<any>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(() => {
     getAttentions(patientId)
@@ -95,6 +97,22 @@ export default function AttentionsTab({ patient }: { patient: any }) {
   const summary = (a: any) => {
     const done = PROCEDIMIENTOS.filter(([key]) => a[key] === 'SI').map(([, label]) => label)
     return done.length > 0 ? done.join(', ') : 'Sin procedimientos marcados'
+  }
+
+  const confirmarEliminar = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await deleteAttention(deleteTarget.id)
+      showToast('Atención eliminada')
+      setDeleteTarget(null)
+      load()
+    } catch (err) {
+      console.error(err)
+      showToast('Error eliminando la atención', 'error')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   if (loading) return <p className="text-gray-500 py-6 text-center">Cargando atenciones...</p>
@@ -191,6 +209,16 @@ export default function AttentionsTab({ patient }: { patient: any }) {
                       🧾 Boleta
                     </span>
                   )}
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeleteTarget(a)
+                    }}
+                    className="text-rosa/60 hover:text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 text-sm transition"
+                    title="Eliminar atención"
+                  >
+                    🗑
+                  </span>
                   <span className="text-gray-400">{expanded === a.id ? '▲' : '▼'}</span>
                 </div>
               </button>
@@ -242,6 +270,42 @@ export default function AttentionsTab({ patient }: { patient: any }) {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Confirmación de eliminación */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4">
+          <div className="bg-marfil rounded-3xl shadow-2xl border border-arena max-w-sm w-full p-8 text-center animate-fade-up">
+            <div className="w-16 h-16 mx-auto rounded-full bg-rosa-palo flex items-center justify-center text-3xl">
+              🗑
+            </div>
+            <h2 className="font-display text-2xl text-tinta font-medium mt-4">
+              ¿Eliminar esta <span className="italic">atención</span>?
+            </h2>
+            <p className="mt-3 text-sm text-foreground/75 leading-relaxed">
+              Del {new Date(deleteTarget.fecha + 'T00:00:00').toLocaleDateString('es-CL')}
+              <br />
+              {summary(deleteTarget)}
+            </p>
+            <p className="mt-2 text-xs text-rosa font-semibold">
+              Se borrará del historial clínico y de los ingresos. No se puede deshacer.
+            </p>
+            <button
+              onClick={confirmarEliminar}
+              disabled={deleting}
+              className="mt-5 w-full bg-rosa text-marfil py-3 rounded-full font-bold hover:opacity-90 transition disabled:opacity-50"
+            >
+              {deleting ? 'Eliminando...' : 'Sí, eliminar'}
+            </button>
+            <button
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+              className="mt-3 w-full py-3 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
     </div>
