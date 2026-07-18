@@ -146,8 +146,10 @@ export default function DocumentsTab({ patient }: { patient: any }) {
       const signed = await getDocumentSignedUrl(doc.pdf_url)
       const res = await fetch(signed)
       if (!res.ok) throw new Error('No se pudo descargar el PDF')
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
+      // Forzar el tipo application/pdf: si no, el navegador no lo
+      // muestra incrustado y ofrece descargarlo
+      const bytes = await res.arrayBuffer()
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
       setViewer({ doc, url })
     } catch (err) {
       showToast('Error abriendo el PDF', 'error')
@@ -162,14 +164,22 @@ export default function DocumentsTab({ patient }: { patient: any }) {
     setViewer(null)
   }
 
+  // Imprime usando un iframe oculto con la copia local del PDF
   const imprimir = () => {
-    const frame = document.getElementById('pdf-frame') as HTMLIFrameElement | null
-    try {
-      frame?.contentWindow?.focus()
-      frame?.contentWindow?.print()
-    } catch {
-      showToast('Usa el botón de imprimir del visor', 'error')
+    if (!viewer) return
+    const frame = document.createElement('iframe')
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+    frame.src = viewer.url
+    frame.onload = () => {
+      try {
+        frame.contentWindow?.focus()
+        frame.contentWindow?.print()
+      } catch {
+        showToast('Usa el ícono de imprimir del visor', 'error')
+      }
+      setTimeout(() => frame.remove(), 60000)
     }
+    document.body.appendChild(frame)
   }
 
   const nombreArchivo = (doc: any) =>
@@ -368,12 +378,19 @@ export default function DocumentsTab({ patient }: { patient: any }) {
             </div>
 
             {/* PDF */}
-            <iframe
-              id="pdf-frame"
-              src={viewer.url}
-              title="Documento"
-              className="flex-1 w-full bg-white"
-            />
+            <object
+              data={viewer.url}
+              type="application/pdf"
+              className="flex-1 w-full bg-gray-100"
+            >
+              {/* Respaldo si el navegador no puede incrustar PDFs */}
+              <iframe
+                id="pdf-frame"
+                src={viewer.url}
+                title="Documento"
+                className="w-full h-full bg-white"
+              />
+            </object>
           </div>
         </div>
       )}
