@@ -246,7 +246,7 @@ export default function PatientDetailPage() {
 
       {/* Tab: Citas */}
       {tab === 'citas' && (
-        <div className="space-y-4 max-w-3xl">
+        <div className="space-y-4 max-w-5xl">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-2xl text-tinta font-semibold">
               📅 Citas ({appointments.filter((a) => citasFiltro === 'todo' || (a.tipo ?? 'podologia') === citasFiltro).length})
@@ -305,10 +305,10 @@ export default function PatientDetailPage() {
                   <table className="w-full">
                     <thead className="bg-arena/50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Fecha</th>
-                        <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Hora</th>
-                        <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Tipo</th>
-                        <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Estado</th>
+                        <th className="px-4 py-3 text-left text-sm font-bold text-tinta whitespace-nowrap">Fecha</th>
+                        <th className="px-3 py-3 text-left text-sm font-bold text-tinta whitespace-nowrap">Hora</th>
+                        <th className="px-4 py-3 text-left text-sm font-bold text-tinta w-64">Tipo</th>
+                        <th className="px-3 py-3 text-left text-sm font-bold text-tinta whitespace-nowrap">Estado</th>
                         <th className="px-4 py-3 text-left text-sm font-bold text-tinta">Notas</th>
                         <th className="px-4 py-3"></th>
                       </tr>
@@ -316,23 +316,25 @@ export default function PatientDetailPage() {
                     <tbody>
                       {filtradas.map((a) => (
                         <tr key={a.id} className="border-t border-arena/60 hover:bg-rosa-palo/20">
-                          <td className="px-4 py-3 text-sm">{new Date(a.appointment_date).toLocaleDateString('es-CL')}</td>
-                          <td className="px-4 py-3 text-sm">{String(a.appointment_date).substring(11, 16)}</td>
+                          <td className="px-4 py-3 text-sm whitespace-nowrap">{new Date(a.appointment_date).toLocaleDateString('es-CL')}</td>
+                          <td className="px-3 py-3 text-sm whitespace-nowrap">{String(a.appointment_date).substring(11, 16)}</td>
                           <td className="px-4 py-3 text-sm">
                             {a.tipo === 'manicura' ? (
-                              <span className="px-2 py-1 rounded-full text-xs font-bold bg-[#a37cc4]/15 text-[#7c5a99]">
+                              <span className="inline-block whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold bg-[#a37cc4]/15 text-[#7c5a99]">
                                 💅 {a.nail_services?.nombre || 'Manicura'}
                               </span>
                             ) : (
-                              <span className="px-2 py-1 rounded-full text-xs font-bold bg-tinta/10 text-tinta">🦶 Podología</span>
+                              <span className="inline-block whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold bg-tinta/10 text-tinta">
+                                🦶 Podología
+                              </span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-sm">
-                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${a.status === 'scheduled' ? 'bg-blue-100 text-blue-800' : a.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          <td className="px-3 py-3 text-sm">
+                            <span className={`inline-block whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold ${a.status === 'scheduled' ? 'bg-blue-100 text-blue-800' : a.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                               {STATUS_LABEL[a.status] || a.status}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{a.notes || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 min-w-40">{a.notes || '—'}</td>
                           <td className="px-4 py-3 text-right whitespace-nowrap">
                             {(a.status === 'scheduled' || a.status === 'cancelled') && (
                               <button onClick={() => setScheduler(a)} className="bg-rosa-palo/60 text-tinta px-3 py-1 rounded-full text-xs font-bold hover:bg-rosa-palo transition" title={a.status === 'cancelled' ? 'Volver a agendar' : 'Cambiar fecha/hora'}>🔄 Reagendar</button>
