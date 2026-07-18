@@ -6,6 +6,7 @@ import {
   createDocument,
   uploadDocumentPdf,
   getDocumentSignedUrl,
+  deleteDocument,
   getAvailability,
   getBlockouts,
 } from '@/lib/supabase'
@@ -44,6 +45,8 @@ export default function DocumentsTab({ patient }: { patient: any }) {
   const [activeDays, setActiveDays] = useState<number[]>([])
   const [blockedDates, setBlockedDates] = useState<string[]>([])
   const [clinic, setClinic] = useState<ClinicInfo>(CLINIC)
+  const [deleteTarget, setDeleteTarget] = useState<any>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(() => {
     getDocuments(patient.id)
@@ -169,6 +172,22 @@ export default function DocumentsTab({ patient }: { patient: any }) {
     }
   }
 
+  const confirmarEliminar = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await deleteDocument(deleteTarget.id, deleteTarget.pdf_url)
+      showToast('Documento eliminado')
+      setDeleteTarget(null)
+      load()
+    } catch (err) {
+      console.error(err)
+      showToast('Error eliminando el documento', 'error')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   if (loading) return <p className="text-gray-500 py-6 text-center">Cargando documentos...</p>
 
   return (
@@ -269,9 +288,54 @@ export default function DocumentsTab({ patient }: { patient: any }) {
                 >
                   💬 WhatsApp
                 </button>
+                <button
+                  onClick={() => setDeleteTarget(doc)}
+                  className="text-rosa/70 hover:text-rosa hover:bg-rosa-palo/50 rounded-full px-2.5 py-1.5 text-sm transition"
+                  title="Eliminar documento"
+                >
+                  🗑
+                </button>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Confirmación de eliminación */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4">
+          <div className="bg-marfil rounded-3xl shadow-2xl border border-arena max-w-sm w-full p-8 text-center animate-fade-up">
+            <div className="w-16 h-16 mx-auto rounded-full bg-rosa-palo flex items-center justify-center text-3xl">
+              🗑
+            </div>
+            <h2 className="font-display text-2xl text-tinta font-medium mt-4">
+              ¿Eliminar {deleteTarget.tipo === 'receta' ? 'esta receta' : 'estas indicaciones'}?
+            </h2>
+            <p className="mt-3 text-sm text-foreground/75 leading-relaxed">
+              Del {new Date(deleteTarget.created_at).toLocaleDateString('es-CL')}
+              {deleteTarget.diagnostico ? ` · ${deleteTarget.diagnostico}` : ''}
+              <br />
+              Se borrará también el PDF.{' '}
+              <strong className="text-rosa">Esta acción no se puede deshacer.</strong>
+            </p>
+            <p className="mt-2 text-xs text-gray-400">
+              Si ya lo compartiste por WhatsApp, el enlace dejará de funcionar.
+            </p>
+            <button
+              onClick={confirmarEliminar}
+              disabled={deleting}
+              className="mt-5 w-full bg-rosa text-marfil py-3 rounded-full font-bold hover:opacity-90 transition disabled:opacity-50"
+            >
+              {deleting ? 'Eliminando...' : 'Sí, eliminar'}
+            </button>
+            <button
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+              className="mt-3 w-full py-3 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -473,6 +473,15 @@ export async function uploadDocumentPdf(path: string, blob: Blob) {
 }
 
 // Genera un link firmado temporal (30 días) para compartir el PDF
+// Elimina el registro y también el PDF del almacenamiento
+export async function deleteDocument(id: string, pdfPath?: string) {
+  if (pdfPath) {
+    await supabase.storage.from('documents').remove([pdfPath])
+  }
+  const { error } = await supabase.from('documents').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function getDocumentSignedUrl(path: string) {
   const { data, error } = await supabase.storage
     .from('documents')
