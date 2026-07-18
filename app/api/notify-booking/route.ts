@@ -26,7 +26,10 @@ async function sendEmail(to: string, subject: string, html: string, fromName: st
   })
   if (!res.ok) {
     const detail = await res.text()
-    throw new Error(`Brevo ${res.status}: ${detail}`)
+    const err: any = new Error(`Brevo ${res.status}: ${detail}`)
+    err.brevoStatus = res.status
+    err.brevoDetail = detail
+    throw err
   }
 }
 
@@ -136,8 +139,20 @@ export async function POST(req: Request) {
     )
 
     return NextResponse.json({ ok: true })
-  } catch (err) {
+  } catch (err: any) {
+    // Devolver el motivo real ayuda a diagnosticar fallos de envío
+    // (p. ej. API key inválida o remitente no verificado en Brevo)
     console.error('notify-booking error:', err)
-    return NextResponse.json({ ok: false }, { status: 500 })
+    return NextResponse.json(
+      {
+        ok: false,
+        stage: err?.brevoStatus ? 'brevo' : 'server',
+        brevoStatus: err?.brevoStatus ?? null,
+        detail: String(err?.brevoDetail ?? err?.message ?? 'error').slice(0, 300),
+        from: process.env.BREVO_FROM_EMAIL ?? null,
+        hasKey: !!process.env.BREVO_API_KEY,
+      },
+      { status: 500 }
+    )
   }
 }
