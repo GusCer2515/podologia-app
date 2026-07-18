@@ -195,14 +195,21 @@ export default function AdminAgendaPage() {
     const now = new Date()
     const nowMin = now.getHours() * 60 + now.getMinutes()
     const isToday = iso === todayIso
-    const freeSlots: string[] = []
+    // Cupos libres + cuántos minutos seguidos hay disponibles desde cada uno
+    const freeSlots: { time: string; gap: number }[] = []
     if (config && !blocked) {
       for (let t = start; t + 30 <= end; t += 30) {
         const cellEnd = t + 30
         if (lunchStart != null && overlaps(t, cellEnd, lunchStart, lunchEnd!)) continue
         if (busy.some((b) => overlaps(t, cellEnd, b.start, b.end))) continue
         if (isToday && t <= nowMin) continue
-        freeSlots.push(toHHMM(t))
+
+        // Hasta dónde llega el espacio libre (próxima cita, almuerzo o cierre)
+        let limite = end
+        if (lunchStart != null && lunchStart >= t) limite = Math.min(limite, lunchStart)
+        for (const b of busy) if (b.start >= t) limite = Math.min(limite, b.start)
+
+        freeSlots.push({ time: toHHMM(t), gap: limite - t })
       }
     }
 
@@ -358,19 +365,34 @@ export default function AdminAgendaPage() {
                         ...day.dayAppts
                           .filter((a) => a.status !== 'cancelled')
                           .map((a) => ({ min: toMin(String(a.appointment_date).substring(11, 16)), kind: 'appt' as const, apt: a })),
-                        ...day.freeSlots.map((t) => ({ min: toMin(t), kind: 'free' as const, time: t })),
+                        ...day.freeSlots.map((s) => ({
+                          min: toMin(s.time),
+                          kind: 'free' as const,
+                          time: s.time,
+                          gap: s.gap,
+                        })),
                       ]
                         .sort((a, b) => a.min - b.min)
                         .map((row) => {
                           if (row.kind === 'free') {
+                            const corto = row.gap < 60
                             return (
                               <button
                                 key={`free-${row.time}`}
                                 onClick={() => setBookSlot({ date: day.iso, time: row.time, info: day.info })}
-                                className="w-full border border-dashed border-arena rounded-lg p-1.5 text-xs text-gray-400 hover:border-tinta-suave hover:text-tinta hover:bg-rosa-palo/20 transition text-left"
-                                title="Agendar en este cupo"
+                                className={`w-full border border-dashed rounded-lg p-1.5 text-xs transition text-left ${
+                                  corto
+                                    ? 'border-yellow-300 text-yellow-700 hover:bg-yellow-50'
+                                    : 'border-arena text-gray-400 hover:border-tinta-suave hover:text-tinta hover:bg-rosa-palo/20'
+                                }`}
+                                title={
+                                  corto
+                                    ? `Solo caben ${row.gap} min (no alcanza una podología de 1 h)`
+                                    : 'Agendar en este cupo'
+                                }
                               >
                                 + {row.time} disponible
+                                {corto && <span className="font-bold"> · solo {row.gap} min</span>}
                               </button>
                             )
                           }
