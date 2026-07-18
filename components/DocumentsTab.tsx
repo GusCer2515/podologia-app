@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   getDocuments,
   createDocument,
@@ -47,8 +47,11 @@ export default function DocumentsTab({ patient }: { patient: any }) {
   const [clinic, setClinic] = useState<ClinicInfo>(CLINIC)
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
   const [deleting, setDeleting] = useState(false)
-  // Visor de PDF interno (usa una copia local del archivo para poder imprimir)
-  const [viewer, setViewer] = useState<{ doc: any; url: string } | null>(null)
+  // Visor de PDF interno: renderizamos las páginas nosotros (pdf.js) para no
+  // depender de la configuración de PDFs del navegador
+  const [viewer, setViewer] = useState<{ doc: any; url: string; bytes: ArrayBuffer } | null>(null)
+  const [renderizando, setRenderizando] = useState(false)
+  const paginasRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(() => {
     getDocuments(patient.id)
@@ -150,7 +153,7 @@ export default function DocumentsTab({ patient }: { patient: any }) {
       // muestra incrustado y ofrece descargarlo
       const bytes = await res.arrayBuffer()
       const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
-      setViewer({ doc, url })
+      setViewer({ doc, url, bytes })
     } catch (err) {
       showToast('Error abriendo el PDF', 'error')
       console.error(err)
@@ -164,22 +167,69 @@ export default function DocumentsTab({ patient }: { patient: any }) {
     setViewer(null)
   }
 
-  // Imprime usando un iframe oculto con la copia local del PDF
-  const imprimir = () => {
+  // Dibuja cada página del PDF en un canvas dentro del visor
+  useEffect(() => {
     if (!viewer) return
-    const frame = document.createElement('iframe')
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
-    frame.src = viewer.url
-    frame.onload = () => {
+    let cancelado = false
+    setRenderizando(true)
+    ;(async () => {
       try {
-        frame.contentWindow?.focus()
-        frame.contentWindow?.print()
-      } catch {
-        showToast('Usa el ícono de imprimir del visor', 'error')
+        const pdfjs: any = await import('pdfjs-dist')
+        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+        const pdf = await pdfjs.getDocument({ data: viewer.bytes.slice(0) }).promise
+        if (cancelado) return
+        const cont = paginasRef.current
+        if (!cont) return
+        cont.innerHTML = ''
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i)
+          const viewport = page.getViewport({ scale: 2 })
+          const canvas = document.createElement('canvas')
+          canvas.width = viewport.width
+          canvas.height = viewport.height
+          canvas.className = 'w-full h-auto rounded-lg shadow-md mb-4 bg-white'
+          cont.appendChild(canvas)
+          await page.render({ canvas, canvasContext: canvas.getContext('2d')!, viewport }).promise
+          if (cancelado) return
+        }
+      } catch (err) {
+        console.error('Error renderizando PDF:', err)
+        showToast('No se pudo mostrar el PDF. Usa Descargar.', 'error')
+      } finally {
+        if (!cancelado) setRenderizando(false)
       }
-      setTimeout(() => frame.remove(), 60000)
+    })()
+    return () => {
+      cancelado = true
     }
-    document.body.appendChild(frame)
+  }, [viewer])
+
+  // Imprime las páginas ya renderizadas (funciona en cualquier navegador)
+  const imprimir = () => {
+    const canvases = paginasRef.current?.querySelectorAll('canvas')
+    if (!canvases || canvases.length === 0) {
+      showToast('Espera a que cargue el documento', 'error')
+      return
+    }
+    const imgs = Array.from(canvases)
+      .map((c) => `<img src="${(c as HTMLCanvasElement).toDataURL('image/png')}" />`)
+      .join('')
+    const win = window.open('', '_blank', 'width=850,height=1100')
+    if (!win) {
+      showToast('El navegador bloqueó la ventana de impresión', 'error')
+      return
+    }
+    win.document.write(`<!doctype html><html><head><title>Documento</title>
+      <style>
+        @page { margin: 0; }
+        body { margin: 0; }
+        img { width: 100%; display: block; page-break-after: always; }
+      </style></head><body>${imgs}</body></html>`)
+    win.document.close()
+    win.onload = () => {
+      win.focus()
+      win.print()
+    }
   }
 
   const nombreArchivo = (doc: any) =>
@@ -378,19 +428,13 @@ export default function DocumentsTab({ patient }: { patient: any }) {
             </div>
 
             {/* PDF */}
-            <object
-              data={viewer.url}
-              type="application/pdf"
-              className="flex-1 w-full bg-gray-100"
-            >
-              {/* Respaldo si el navegador no puede incrustar PDFs */}
-              <iframe
-                id="pdf-frame"
-                src={viewer.url}
-                title="Documento"
-                className="w-full h-full bg-white"
-              />
-            </object>
+            {/* Páginas renderizadas con pdf.js */}
+            <div className="flex-1 overflow-y-auto bg-arena/40 p-4">
+              {renderizando && (
+                <p className="text-center text-sm text-gray-500 py-8">Cargando documento...</p>
+              )}
+              <div ref={paginasRef} className="max-w-2xl mx-auto" />
+            </div>
           </div>
         </div>
       )}
