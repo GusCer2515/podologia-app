@@ -340,6 +340,52 @@ export async function deletePost(id: string) {
 }
 
 // ============================================================
+// TESTIMONIOS DE PACIENTES
+// ============================================================
+
+// Público: solo los aprobados
+export async function getApprovedTestimonials() {
+  const { data, error } = await supabase
+    .from('testimonials')
+    .select('*')
+    .eq('aprobado', true)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+// Envío desde el sitio (queda pendiente de aprobación)
+export async function submitTestimonial(nombre: string, rating: number, comentario: string) {
+  const { data, error } = await supabase.rpc('submit_testimonial', {
+    p_nombre: nombre,
+    p_rating: rating,
+    p_comentario: comentario,
+  })
+  if (error) throw error
+  return data as { success: boolean; error?: string }
+}
+
+// Admin: todos (para moderar)
+export async function getAllTestimonials() {
+  const { data, error } = await supabase
+    .from('testimonials')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function updateTestimonial(id: string, fields: any) {
+  const { error } = await supabase.from('testimonials').update(fields).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteTestimonial(id: string) {
+  const { error } = await supabase.from('testimonials').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ============================================================
 // FICHA CLÍNICA
 // ============================================================
 

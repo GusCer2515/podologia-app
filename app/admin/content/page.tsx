@@ -11,6 +11,9 @@ import {
   updatePost,
   deletePost,
   uploadPublicImage,
+  getAllTestimonials,
+  updateTestimonial,
+  deleteTestimonial,
 } from '@/lib/supabase'
 import { showToast } from '@/components/toast'
 
@@ -72,17 +75,22 @@ function PostPreview({ post }: { post: { titulo: string; contenido: string; imag
 export default function ContentPage() {
   const [casos, setCasos] = useState<any[]>([])
   const [posts, setPosts] = useState<any[]>([])
+  const [testimonios, setTestimonios] = useState<any[]>([])
+  const [testimoniosOk, setTestimoniosOk] = useState(true)
   const [loading, setLoading] = useState(true)
   const [tablesOk, setTablesOk] = useState(true)
 
   const load = useCallback(async () => {
-    const [c, p] = await Promise.all([
+    const [c, p, t] = await Promise.all([
       getAllCarouselCases().catch(() => null),
       getAllPosts().catch(() => null),
+      getAllTestimonials().catch(() => null),
     ])
     setTablesOk(c !== null && p !== null)
     setCasos(c ?? [])
     setPosts(p ?? [])
+    setTestimoniosOk(t !== null)
+    setTestimonios(t ?? [])
     setLoading(false)
   }, [])
 
@@ -107,6 +115,7 @@ export default function ContentPage() {
       )}
 
       <CarouselManager casos={casos} reload={load} />
+      <TestimonialsManager testimonios={testimonios} reload={load} ok={testimoniosOk} />
       <PostsManager posts={posts} reload={load} />
     </div>
   )
@@ -319,6 +328,126 @@ function CaseCard({ caso, reload, onDelete }: { caso: any; reload: () => void; o
         </div>
       </div>
     </div>
+  )
+}
+
+// ============================================================
+// MODERACIÓN DE TESTIMONIOS
+// ============================================================
+function TestimonialsManager({
+  testimonios,
+  reload,
+  ok,
+}: {
+  testimonios: any[]
+  reload: () => void
+  ok: boolean
+}) {
+  const pendientes = testimonios.filter((t) => !t.aprobado)
+  const publicados = testimonios.filter((t) => t.aprobado)
+
+  const aprobar = async (t: any, valor: boolean) => {
+    try {
+      await updateTestimonial(t.id, { aprobado: valor })
+      showToast(valor ? 'Testimonio publicado en el sitio 🌸' : 'Testimonio ocultado')
+      reload()
+    } catch {
+      showToast('Error actualizando el testimonio', 'error')
+    }
+  }
+
+  const borrar = async (t: any) => {
+    try {
+      await deleteTestimonial(t.id)
+      showToast('Testimonio eliminado')
+      reload()
+    } catch {
+      showToast('Error eliminando', 'error')
+    }
+  }
+
+  const Card = ({ t }: { t: any }) => (
+    <div className={`bg-white border rounded-2xl p-4 ${t.aprobado ? 'border-arena' : 'border-rosa/40 bg-rosa-palo/10'}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-bold text-tinta text-sm">
+          {t.nombre} <span className="text-rosa">{'★'.repeat(t.rating || 5)}</span>
+        </p>
+        <p className="text-[11px] text-gray-400">
+          {new Date(t.created_at).toLocaleDateString('es-CL')} ·{' '}
+          {t.aprobado ? '🟢 Publicado' : '🟠 Pendiente'}
+        </p>
+      </div>
+      <p className="text-sm text-foreground/80 mt-2 italic">“{t.comentario}”</p>
+      <div className="flex flex-wrap gap-2 mt-3">
+        <button
+          onClick={() => aprobar(t, !t.aprobado)}
+          className={`px-4 py-1 rounded-full text-xs font-bold transition ${
+            t.aprobado
+              ? 'bg-arena text-tinta hover:bg-arena/70'
+              : 'bg-salvia text-marfil hover:opacity-90'
+          }`}
+        >
+          {t.aprobado ? '👁 Ocultar' : '✅ Aprobar y publicar'}
+        </button>
+        <button
+          onClick={() => borrar(t)}
+          className="text-rosa/70 hover:text-rosa px-2 py-1 text-xs font-semibold transition"
+        >
+          🗑 Eliminar
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
+      <h2 className="font-display text-2xl text-tinta font-semibold mb-1">
+        ⭐ Testimonios de pacientes
+        {pendientes.length > 0 && (
+          <span className="ml-2 align-middle bg-rosa text-marfil text-xs font-bold px-2.5 py-0.5 rounded-full">
+            {pendientes.length} por revisar
+          </span>
+        )}
+      </h2>
+      <p className="text-sm text-gray-500 mb-5">
+        Los pacientes envían su experiencia desde el sitio. Nada se publica hasta que tú lo
+        apruebes.
+      </p>
+
+      {!ok && (
+        <div className="bg-rosa-palo/60 border border-rosa/40 rounded-2xl px-5 py-4 text-sm text-tinta mb-4">
+          ⚠️ <strong>Falta un paso:</strong> ejecuta{' '}
+          <code className="bg-white px-2 py-0.5 rounded">supabase/fase21_testimonios.sql</code> en
+          el SQL Editor de Supabase.
+        </div>
+      )}
+
+      {pendientes.length > 0 && (
+        <>
+          <p className="text-xs font-bold uppercase tracking-wide text-rosa mb-2">
+            Pendientes de aprobación
+          </p>
+          <div className="space-y-2 mb-6">
+            {pendientes.map((t) => (
+              <Card key={t.id} t={t} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <p className="text-xs font-bold uppercase tracking-wide text-tinta-suave mb-2">
+        Publicados en el sitio ({publicados.length})
+      </p>
+      {publicados.length === 0 ? (
+        <p className="text-sm text-gray-400">Aún no hay testimonios publicados</p>
+      ) : (
+        <div className="space-y-2">
+          {publicados.map((t) => (
+            <Card key={t.id} t={t} />
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 

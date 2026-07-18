@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { CLINIC } from '@/lib/clinicConfig'
 import CasosCarousel from '@/components/CasosCarousel'
 import ContactButtons from '@/components/ContactButtons'
+import Testimonios from '@/components/Testimonios'
 
 const SERVICIOS = [
   {
@@ -221,6 +222,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* ================= TESTIMONIOS ================= */}
+      <Testimonios />
 
       {/* ================= CONTACTO / FOOTER ================= */}
       <footer id="contacto" className="relative bg-crema pt-16">
