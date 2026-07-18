@@ -33,6 +33,50 @@ function classifyVideo(url?: string | null): { kind: string; id?: string; embedd
   return { kind: 'other', embeddable: false, label: 'ℹ️ Enlace no reconocido para incrustar. Se mostrará como botón "Ver video". Para incrustar usa YouTube o Vimeo.' }
 }
 
+// Modal de vista previa: mismo ancho que el sitio real, con cabecera fija
+function PreviewModal({
+  post,
+  onClose,
+}: {
+  post: { titulo: string; contenido: string; imageUrl?: string; videoUrl?: string; created_at?: string }
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-tinta/60 backdrop-blur-sm p-4 sm:p-8 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-crema rounded-3xl shadow-2xl border border-arena w-full max-w-3xl my-auto overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Cabecera fija */}
+        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3 bg-marfil border-b border-arena">
+          <div>
+            <p className="font-display text-xl text-tinta font-semibold">👁 Vista previa</p>
+            <p className="text-xs text-gray-500">Así se verá en la sección Consejos del sitio</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-full border border-arena text-tinta hover:bg-arena/50 transition text-lg leading-none"
+            aria-label="Cerrar"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Contenido con el ancho real del blog */}
+        <div className="p-6 sm:p-8">
+          <PostPreview post={post} />
+          <p className="text-xs text-gray-400 mt-4 text-center">
+            Previsualización — aún no se ha publicado nada.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Vista previa de una publicación tal como se verá en /blog
 function PostPreview({ post }: { post: { titulo: string; contenido: string; imageUrl?: string; videoUrl?: string; created_at?: string } }) {
   const v = classifyVideo(post.videoUrl)
@@ -588,16 +632,10 @@ function PostsManager({ posts, reload }: { posts: any[]; reload: () => void }) {
 
       {/* Modal de vista previa */}
       {preview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4" onClick={() => setPreview(false)}>
-          <div className="bg-crema rounded-3xl shadow-2xl border border-arena max-w-lg w-full max-h-[90vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-display text-xl text-tinta font-semibold">👁 Así se verá en el sitio</p>
-              <button onClick={() => setPreview(false)} className="text-gray-400 hover:text-tinta text-xl">✕</button>
-            </div>
-            <PostPreview post={{ titulo, contenido, imageUrl: file ? URL.createObjectURL(file) : undefined, videoUrl }} />
-            <p className="text-xs text-gray-400 mt-3 text-center">Esto es solo una previsualización. Aún no se ha publicado.</p>
-          </div>
-        </div>
+        <PreviewModal
+          post={{ titulo, contenido, imageUrl: file ? URL.createObjectURL(file) : undefined, videoUrl }}
+          onClose={() => setPreview(false)}
+        />
       )}
 
       {/* Publicaciones existentes */}
@@ -689,15 +727,10 @@ function PostRow({ post, reload, onToggle, onRemove }: { post: any; reload: () =
         </div>
 
         {preview && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4" onClick={() => setPreview(false)}>
-            <div className="bg-crema rounded-3xl shadow-2xl border border-arena max-w-lg w-full max-h-[90vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-3">
-                <p className="font-display text-xl text-tinta font-semibold">👁 Así se verá en el sitio</p>
-                <button onClick={() => setPreview(false)} className="text-gray-400 hover:text-tinta text-xl">✕</button>
-              </div>
-              <PostPreview post={{ titulo, contenido, imageUrl: imagenPreview, videoUrl, created_at: post.created_at }} />
-            </div>
-          </div>
+          <PreviewModal
+            post={{ titulo, contenido, imageUrl: imagenPreview, videoUrl, created_at: post.created_at }}
+            onClose={() => setPreview(false)}
+          />
         )}
       </div>
     )
