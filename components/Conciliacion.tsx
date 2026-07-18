@@ -317,12 +317,20 @@ export default function Conciliacion() {
       const blob = new Blob([buf], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       })
+      // Descarga compatible con Safari/iPad: el enlace debe estar en el DOM
+      // y la URL no se libera de inmediato (si no, la descarga se cancela)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `cartola-conciliada-${new Date().toISOString().substring(0, 10)}.xlsx`
+      a.rel = 'noopener'
+      a.style.display = 'none'
+      document.body.appendChild(a)
       a.click()
-      URL.revokeObjectURL(url)
+      setTimeout(() => {
+        a.remove()
+        URL.revokeObjectURL(url)
+      }, 5000)
       showToast('Cartola descargada con las filas pintadas 🟩')
     } catch (err) {
       console.error(err)
@@ -350,10 +358,10 @@ export default function Conciliacion() {
       </h2>
       <p className="text-sm text-gray-500 mb-4">
         Sube la cartola del banco y asocia cada transferencia con su atención:{' '}
-        <strong>arrastra una transferencia sobre la atención</strong> (o haz click en la
-        transferencia y luego en “Asociar aquí”). Una misma transferencia puede cubrir{' '}
-        <strong>varias atenciones</strong> (ej: alguien que paga por sí misma y por su mamá). El
-        archivo se procesa solo en este navegador.
+        <strong>toca la transferencia</strong> y luego <strong>“Asociar aquí”</strong> en la
+        atención que corresponda. En computador también puedes arrastrarla. Una misma
+        transferencia puede cubrir <strong>varias atenciones</strong> (ej: alguien que paga por sí
+        misma y por su mamá). El archivo se procesa solo en este dispositivo.
       </p>
 
       <input
@@ -552,9 +560,9 @@ export default function Conciliacion() {
           </div>
 
           <p className="text-xs text-gray-400">
-            💡 Para una transferencia que cubre a 2 personas: haz click en ella y luego en
-            “Asociar aquí” en cada atención. Quedará en amarillo (parcial) hasta que la suma
-            calce con el monto, y ahí pasa a verde ✅.
+            💡 Para una transferencia que cubre a 2 personas: tócala y luego “Asociar aquí” en
+            cada atención. Quedará en amarillo (parcial) hasta que la suma calce con el monto, y
+            ahí pasa a verde ✅.
           </p>
         </div>
       )}

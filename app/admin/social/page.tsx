@@ -173,8 +173,23 @@ function PostCard({ post, reload }: { post: any; reload: () => void }) {
     try {
       await navigator.clipboard.writeText(texto)
       showToast('Texto copiado — pégalo en Instagram 📋')
+      return
     } catch {
-      showToast('No se pudo copiar', 'error')
+      // Safari/iPad a veces bloquea el portapapeles: método alternativo
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = texto
+        ta.setAttribute('readonly', '')
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'
+        document.body.appendChild(ta)
+        ta.select()
+        ta.setSelectionRange(0, texto.length)
+        document.execCommand('copy')
+        ta.remove()
+        showToast('Texto copiado — pégalo en Instagram 📋')
+      } catch {
+        showToast('No se pudo copiar. Selecciona el texto y cópialo a mano.', 'error')
+      }
     }
   }
 

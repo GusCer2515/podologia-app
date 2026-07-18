@@ -51,6 +51,7 @@ export default function DocumentsTab({ patient }: { patient: any }) {
   // depender de la configuración de PDFs del navegador
   const [viewer, setViewer] = useState<{ doc: any; url: string; bytes: ArrayBuffer } | null>(null)
   const [renderizando, setRenderizando] = useState(false)
+  const [fallback, setFallback] = useState(false)
   const paginasRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(() => {
@@ -167,34 +168,53 @@ export default function DocumentsTab({ patient }: { patient: any }) {
     setViewer(null)
   }
 
-  // Dibuja cada página del PDF en un canvas dentro del visor
+  // Dibuja cada página del PDF en un canvas dentro del visor.
+  // Se usa la compilación "legacy" de pdf.js: es la compatible con Safari/iPad.
+  // Si falla, se muestra el PDF incrustado como respaldo.
   useEffect(() => {
     if (!viewer) return
     let cancelado = false
     setRenderizando(true)
+    setFallback(false)
     ;(async () => {
       try {
-        const pdfjs: any = await import('pdfjs-dist')
-        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
-        const pdf = await pdfjs.getDocument({ data: viewer.bytes.slice(0) }).promise
+        const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs')
+        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.legacy.min.mjs'
+
+        const pdf = await pdfjs.getDocument({
+          data: viewer.bytes.slice(0),
+          // Más tolerante en navegadores restrictivos (iOS/Safari)
+          isEvalSupported: false,
+          useSystemFonts: true,
+        }).promise
         if (cancelado) return
+
         const cont = paginasRef.current
         if (!cont) return
         cont.innerHTML = ''
+
+        // En iPad/iPhone el canvas tiene un límite de tamaño: usamos menos escala
+        const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1)
+        const escala = esIOS ? 1.5 : 2
+
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i)
-          const viewport = page.getViewport({ scale: 2 })
+          const viewport = page.getViewport({ scale: escala })
           const canvas = document.createElement('canvas')
           canvas.width = viewport.width
           canvas.height = viewport.height
           canvas.className = 'w-full h-auto rounded-lg shadow-md mb-4 bg-white'
           cont.appendChild(canvas)
-          await page.render({ canvas, canvasContext: canvas.getContext('2d')!, viewport }).promise
+          const ctx = canvas.getContext('2d')
+          if (!ctx) throw new Error('Sin contexto 2D')
+          await page.render({ canvas, canvasContext: ctx, viewport }).promise
           if (cancelado) return
         }
       } catch (err) {
         console.error('Error renderizando PDF:', err)
-        showToast('No se pudo mostrar el PDF. Usa Descargar.', 'error')
+        // Respaldo: mostrar el PDF con el visor del navegador
+        if (!cancelado) setFallback(true)
       } finally {
         if (!cancelado) setRenderizando(false)
       }
@@ -204,32 +224,52 @@ export default function DocumentsTab({ patient }: { patient: any }) {
     }
   }, [viewer])
 
-  // Imprime las páginas ya renderizadas (funciona en cualquier navegador)
+  // Imprime las páginas renderizadas usando un iframe oculto.
+  // Funciona también en iPad/Safari, donde las ventanas emergentes se bloquean.
   const imprimir = () => {
     const canvases = paginasRef.current?.querySelectorAll('canvas')
+
+    // Si no hay páginas dibujadas (modo respaldo), abrir el PDF para imprimir
     if (!canvases || canvases.length === 0) {
-      showToast('Espera a que cargue el documento', 'error')
+      window.open(viewer?.url, '_blank')
+      showToast('Abre el documento y usa el botón imprimir del visor')
       return
     }
+
     const imgs = Array.from(canvases)
       .map((c) => `<img src="${(c as HTMLCanvasElement).toDataURL('image/png')}" />`)
       .join('')
-    const win = window.open('', '_blank', 'width=850,height=1100')
-    if (!win) {
-      showToast('El navegador bloqueó la ventana de impresión', 'error')
+
+    const frame = document.createElement('iframe')
+    frame.setAttribute('aria-hidden', 'true')
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+    document.body.appendChild(frame)
+
+    const fdoc = frame.contentWindow?.document
+    if (!fdoc) {
+      showToast('No se pudo preparar la impresión', 'error')
+      frame.remove()
       return
     }
-    win.document.write(`<!doctype html><html><head><title>Documento</title>
+    fdoc.open()
+    fdoc.write(`<!doctype html><html><head><title>Documento</title>
       <style>
         @page { margin: 0; }
-        body { margin: 0; }
+        html, body { margin: 0; padding: 0; }
         img { width: 100%; display: block; page-break-after: always; }
       </style></head><body>${imgs}</body></html>`)
-    win.document.close()
-    win.onload = () => {
-      win.focus()
-      win.print()
-    }
+    fdoc.close()
+
+    // Esperar a que las imágenes carguen antes de imprimir
+    setTimeout(() => {
+      try {
+        frame.contentWindow?.focus()
+        frame.contentWindow?.print()
+      } catch {
+        showToast('Usa Descargar y luego imprime el archivo', 'error')
+      }
+      setTimeout(() => frame.remove(), 60000)
+    }, 600)
   }
 
   const nombreArchivo = (doc: any) =>
@@ -428,12 +468,29 @@ export default function DocumentsTab({ patient }: { patient: any }) {
             </div>
 
             {/* PDF */}
-            {/* Páginas renderizadas con pdf.js */}
+            {/* Páginas renderizadas con pdf.js (con respaldo del navegador) */}
             <div className="flex-1 overflow-y-auto bg-arena/40 p-4">
               {renderizando && (
                 <p className="text-center text-sm text-gray-500 py-8">Cargando documento...</p>
               )}
-              <div ref={paginasRef} className="max-w-2xl mx-auto" />
+              {fallback ? (
+                <div className="h-full flex flex-col">
+                  <iframe
+                    src={viewer.url}
+                    title="Documento"
+                    className="flex-1 w-full min-h-[60vh] rounded-lg bg-white"
+                  />
+                  <p className="text-center text-xs text-gray-500 mt-3">
+                    Si no ves el documento, usa{' '}
+                    <a href={viewer.url} target="_blank" rel="noopener noreferrer" className="text-tinta font-bold underline">
+                      abrir en una pestaña nueva
+                    </a>{' '}
+                    o el botón Descargar.
+                  </p>
+                </div>
+              ) : (
+                <div ref={paginasRef} className="max-w-2xl mx-auto" />
+              )}
             </div>
           </div>
         </div>
