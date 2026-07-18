@@ -320,7 +320,15 @@ export default function AdminAgendaPage() {
                   day.blocked ? 'border-rosa/50' : day.isToday ? 'border-arena ring-2 ring-tinta' : 'border-arena'
                 }`}
               >
-                <div className={`px-3 py-2 border-b text-center rounded-t-2xl ${day.blocked ? 'bg-rosa/80 text-marfil' : day.isToday ? 'bg-tinta text-marfil' : 'bg-arena/50 text-tinta'}`}>
+                <div
+                  className={`sticky top-16 z-10 px-3 py-2 border-b border-arena/60 text-center rounded-t-2xl shadow-sm ${
+                    day.blocked
+                      ? 'bg-rosa text-marfil'
+                      : day.isToday
+                      ? 'bg-tinta text-marfil'
+                      : 'bg-arena text-tinta'
+                  }`}
+                >
                   <p className={`text-xs font-semibold uppercase ${isPast ? 'line-through' : ''}`}>{day.name}</p>
                   <p className={`text-sm font-bold ${isPast ? 'line-through' : ''}`}>{fmtShort(day.date)}</p>
                   {pendientes > 0 && !day.blocked && !isPast && (
