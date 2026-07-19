@@ -47,6 +47,8 @@ export default function SettingsPage() {
   const [precioParticular, setPrecioParticular] = useState('30000')
   const [loading, setLoading] = useState(true)
   const [savingHours, setSavingHours] = useState(false)
+  // Los horarios quedan bloqueados: hay que desbloquear a propósito para editarlos
+  const [horariosBloqueados, setHorariosBloqueados] = useState(true)
   // Tiempos de preparación entre atenciones
   const [bufPod, setBufPod] = useState('15')
   const [bufMan, setBufMan] = useState('10')
@@ -335,12 +337,30 @@ export default function SettingsPage() {
 
       {/* ================= HORARIOS ================= */}
       <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
-        <h2 className="font-display text-2xl text-tinta font-semibold mb-1">🕐 Horarios de atención</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+          <h2 className="font-display text-2xl text-tinta font-semibold">🕐 Horarios de atención</h2>
+          <button
+            onClick={() => setHorariosBloqueados(!horariosBloqueados)}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition ${
+              horariosBloqueados
+                ? 'bg-arena text-tinta hover:bg-arena/70'
+                : 'bg-rosa text-marfil hover:opacity-90'
+            }`}
+          >
+            {horariosBloqueados ? '🔒 Bloqueado · desbloquear para editar' : '🔓 Editando · volver a bloquear'}
+          </button>
+        </div>
         <p className="text-sm text-gray-500 mb-5">
           Define qué días atiendes y en qué <strong>bloques de horario</strong>. Puedes tener
-          varios bloques por día (ej: 09:00–13:00 y 15:00–21:30); el espacio entre ellos no
-          estará disponible. Cada podología dura 1 hora; las manicuras usan la duración de su
+          varios bloques por día (ej: 08:30–13:00 y 15:30–21:00); el espacio entre ellos queda
+          sin atención. Cada podología dura 1 hora; las manicuras usan la duración de su
           servicio. Esto controla las horas que ves tú y las que ven los pacientes en la web.
+          {horariosBloqueados && (
+            <span className="block mt-1 text-tinta font-semibold">
+              🔒 Los horarios están protegidos para que no se cambien por accidente. Usa el botón
+              de arriba si necesitas modificarlos.
+            </span>
+          )}
         </p>
 
         <div className="space-y-2">
@@ -360,7 +380,8 @@ export default function SettingsPage() {
                       type="checkbox"
                       checked={c.is_active}
                       onChange={(e) => setDay(d.dow, 'is_active', e.target.checked)}
-                      className="w-4 h-4 accent-[#33506e]"
+                      disabled={horariosBloqueados}
+                      className="w-4 h-4 accent-[#33506e] disabled:opacity-50"
                     />
                     <span className="font-semibold text-tinta text-sm">{d.nombre}</span>
                   </label>
@@ -376,16 +397,18 @@ export default function SettingsPage() {
                             type="time"
                             value={b.start_time}
                             onChange={(e) => setBloque(d.dow, idx, 'start_time', e.target.value)}
-                            className={inputClass}
+                            disabled={horariosBloqueados}
+                            className={`${inputClass} disabled:bg-arena/40 disabled:text-gray-500`}
                           />
                           <span className="text-gray-400 text-sm">a</span>
                           <input
                             type="time"
                             value={b.end_time}
                             onChange={(e) => setBloque(d.dow, idx, 'end_time', e.target.value)}
-                            className={inputClass}
+                            disabled={horariosBloqueados}
+                            className={`${inputClass} disabled:bg-arena/40 disabled:text-gray-500`}
                           />
-                          {c.bloques.length > 1 && (
+                          {c.bloques.length > 1 && !horariosBloqueados && (
                             <button
                               onClick={() => removeBloque(d.dow, idx)}
                               className="text-rosa/70 hover:text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 text-sm transition"
@@ -396,12 +419,14 @@ export default function SettingsPage() {
                           )}
                         </div>
                       ))}
+                      {!horariosBloqueados && (
                       <button
                         onClick={() => addBloque(d.dow)}
                         className="text-xs font-bold text-tinta border border-dashed border-arena rounded-full px-4 py-1.5 hover:border-tinta-suave hover:bg-rosa-palo/20 transition"
                       >
                         + Agregar bloque
                       </button>
+                      )}
                     </div>
                   ) : (
                     <span className="text-sm text-gray-400 pt-1.5">Sin atención</span>
@@ -414,7 +439,7 @@ export default function SettingsPage() {
 
         <button
           onClick={saveHours}
-          disabled={savingHours}
+          disabled={savingHours || horariosBloqueados}
           className="mt-5 bg-tinta text-marfil px-8 py-2.5 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50"
         >
           {savingHours ? 'Guardando...' : '💾 Guardar horarios'}
