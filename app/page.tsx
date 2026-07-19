@@ -4,7 +4,7 @@ import { CLINIC } from '@/lib/clinicConfig'
 import CasosCarousel from '@/components/CasosCarousel'
 import ContactButtons from '@/components/ContactButtons'
 import Testimonios from '@/components/Testimonios'
-import HorasHoy from '@/components/HorasHoy'
+import HorasLiberadas from '@/components/HorasLiberadas'
 
 const SERVICIOS = [
   {
@@ -147,8 +147,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ========== HORAS DISPONIBLES HOY (se oculta si no hay) ========== */}
-      <HorasHoy />
+      {/* ===== HORAS LIBERADAS / DISPONIBLES (se oculta si no hay) ===== */}
+      <HorasLiberadas />
 
       {/* ================= FRANJA DE CONFIANZA ================= */}
       <section className="bg-tinta text-marfil">

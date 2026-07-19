@@ -4,43 +4,72 @@
 import { Document, Page, Text, View, StyleSheet, Image, pdf } from '@react-pdf/renderer'
 import { getClinicInfo, type ClinicInfo } from './clinicConfig'
 
+// El pie de página va FIJO al borde inferior de cada hoja: si fuera parte
+// del texto, empujaría una hoja nueva casi vacía al imprimir.
+// paddingBottom reserva exactamente el alto del pie para que nada se pise.
+const ALTO_PIE = 78
+
 const s = StyleSheet.create({
   page: {
     paddingTop: 34,
-    paddingBottom: 24,
+    paddingBottom: ALTO_PIE,
     paddingHorizontal: 46,
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: 'Helvetica',
     color: '#333333',
   },
-  logo: { width: 150, alignSelf: 'center', marginBottom: 10 },
+  logo: { width: 118, alignSelf: 'center', marginBottom: 6 },
   titulo: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'Helvetica-Bold',
     textAlign: 'center',
-    marginBottom: 14,
+    marginBottom: 10,
     letterSpacing: 0.5,
   },
-  cabecera: { marginBottom: 12, lineHeight: 1.5 },
+  cabecera: { marginBottom: 8, lineHeight: 1.35 },
   seccion: {
-    fontSize: 10.5,
+    fontSize: 9.5,
     fontFamily: 'Helvetica-Bold',
-    marginTop: 12,
-    marginBottom: 5,
+    marginTop: 8,
+    marginBottom: 3,
   },
-  parrafo: { lineHeight: 1.5, textAlign: 'justify', marginBottom: 3 },
-  item: { lineHeight: 1.5, marginLeft: 12, marginBottom: 2 },
+  parrafo: { lineHeight: 1.35, textAlign: 'justify', marginBottom: 2 },
+  item: { lineHeight: 1.35, marginLeft: 12, marginBottom: 1 },
   etiqueta: { fontFamily: 'Helvetica-Bold' },
-  firma: { marginTop: 26, lineHeight: 1.4 },
-  pieBanner: { position: 'relative', marginTop: 18 },
-  pieFlores: { width: '100%' },
-  pieContacto: {
-    fontSize: 8,
+  firma: { marginTop: 16, lineHeight: 1.3 },
+  firmaImg: { width: 86, marginBottom: -5 },
+  // Encabezado breve que se repite desde la segunda hoja
+  encabezadoCont: {
+    position: 'absolute',
+    top: 14,
+    left: 46,
+    right: 46,
+    fontSize: 7.5,
     color: '#999999',
     textAlign: 'center',
-    marginTop: 6,
   },
-  firmaImg: { width: 110, marginBottom: -8 },
+  pie: {
+    position: 'absolute',
+    bottom: 14,
+    left: 46,
+    right: 46,
+  },
+  pieFlores: { width: 220, alignSelf: 'center' },
+  pieContacto: {
+    fontSize: 7.5,
+    color: '#999999',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  pagina: {
+    position: 'absolute',
+    bottom: 5,
+    left: 46,
+    right: 46,
+    fontSize: 7.5,
+    color: '#bbbbbb',
+    textAlign: 'center',
+  },
 })
 
 export interface ReferralData {
@@ -68,7 +97,18 @@ function Punto({ children }: { children: React.ReactNode }) {
   return <Text style={s.item}>• {children}</Text>
 }
 
-function ReferralDocument({
+// Título de sección: minPresenceAhead evita que quede solo al pie de una
+// hoja con su contenido al comienzo de la siguiente
+function Seccion({ children }: { children: React.ReactNode }) {
+  return (
+    <Text style={s.seccion} minPresenceAhead={36}>
+      {children}
+    </Text>
+  )
+}
+
+// Exportado para poder revisar la maquetación sin abrir el navegador
+export function ReferralDocument({
   d,
   origin,
   info,
@@ -86,6 +126,15 @@ function ReferralDocument({
   return (
     <Document title="Informe de derivación" author={info.professional}>
       <Page size="LETTER" style={s.page}>
+        {/* Desde la segunda hoja, recordar de quién es el informe */}
+        <Text
+          style={s.encabezadoCont}
+          fixed
+          render={({ pageNumber }) =>
+            pageNumber > 1 ? `Informe de derivación · ${d.patientName}` : ''
+          }
+        />
+
         <Image style={s.logo} src={`${origin}/pdf-assets/logo.png`} />
         <Text style={s.titulo}>INFORME DE DERIVACIÓN INTERCLÍNICA{'\n'}PODOLÓGICA</Text>
 
@@ -104,7 +153,7 @@ function ReferralDocument({
           </Text>
         </View>
 
-        <Text style={s.seccion}>DATOS DEL PACIENTE</Text>
+        <Seccion>DATOS DEL PACIENTE</Seccion>
         <Text style={s.parrafo}>
           <Text style={s.etiqueta}>Nombre: </Text>
           {d.patientName}
@@ -114,7 +163,7 @@ function ReferralDocument({
         </Text>
 
         {/* 1. Antecedentes */}
-        <Text style={s.seccion}>1. ANTECEDENTES SISTÉMICOS DE RELEVANCIA</Text>
+        <Seccion>1. ANTECEDENTES SISTÉMICOS DE RELEVANCIA</Seccion>
         {d.antecedentes.length > 0 ? (
           d.antecedentes.map((t, i) => <Punto key={i}>{t}</Punto>)
         ) : (
@@ -132,7 +181,7 @@ function ReferralDocument({
         )}
 
         {/* 2. Diagnóstico */}
-        <Text style={s.seccion}>2. DIAGNÓSTICO PODOLÓGICO Y ESTADO ACTUAL</Text>
+        <Seccion>2. DIAGNÓSTICO PODOLÓGICO Y ESTADO ACTUAL</Seccion>
         {d.diagnostico.length > 0 ? (
           d.diagnostico.map((t, i) => <Punto key={i}>{t}</Punto>)
         ) : (
@@ -140,7 +189,7 @@ function ReferralDocument({
         )}
 
         {/* 3. Tratamiento realizado */}
-        <Text style={s.seccion}>3. TRATAMIENTO REALIZADO Y SUGERENCIA DE CONTINUIDAD</Text>
+        <Seccion>3. TRATAMIENTO REALIZADO Y SUGERENCIA DE CONTINUIDAD</Seccion>
         {d.fechaUltimaAtencion && (
           <Text style={s.parrafo}>
             <Text style={s.etiqueta}>Última atención: </Text>
@@ -170,12 +219,12 @@ function ReferralDocument({
         )}
 
         {/* 4. Motivo de la derivación */}
-        <Text style={s.seccion}>4. MOTIVO DE LA DERIVACIÓN</Text>
+        <Seccion>4. MOTIVO DE LA DERIVACIÓN</Seccion>
         <Text style={s.parrafo}>{d.motivo}</Text>
 
         {d.sugerencia && (
           <>
-            <Text style={s.seccion}>5. SUGERENCIA AL PROFESIONAL RECEPTOR</Text>
+            <Seccion>5. SUGERENCIA AL PROFESIONAL RECEPTOR</Seccion>
             <Text style={s.parrafo}>{d.sugerencia}</Text>
           </>
         )}
@@ -186,8 +235,8 @@ function ReferralDocument({
           </Text>
         )}
 
-        {/* Firma */}
-        <View style={s.firma}>
+        {/* Firma: nunca se parte entre dos hojas */}
+        <View style={s.firma} wrap={false}>
           <Text>Atentamente,</Text>
           <Image src={`${origin}/pdf-assets/firma.png`} style={s.firmaImg} />
           <Text style={s.etiqueta}>{info.professional}</Text>
@@ -196,12 +245,21 @@ function ReferralDocument({
           <Text>Contacto: {info.phone}</Text>
         </View>
 
-        <View style={s.pieBanner}>
+        {/* Pie fijo: se repite igual en todas las hojas */}
+        <View style={s.pie} fixed>
           <Image style={s.pieFlores} src={`${origin}/pdf-assets/flores-pie.png`} />
+          <Text style={s.pieContacto}>
+            {info.instagram}  {info.phone}  {info.email}
+          </Text>
         </View>
-        <Text style={s.pieContacto}>
-          {info.instagram}  {info.phone}  {info.email}
-        </Text>
+
+        <Text
+          style={s.pagina}
+          fixed
+          render={({ pageNumber, totalPages }) =>
+            totalPages > 1 ? `Página ${pageNumber} de ${totalPages}` : ''
+          }
+        />
       </Page>
     </Document>
   )
