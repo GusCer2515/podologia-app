@@ -134,21 +134,38 @@ export default function AdminAgendaPage() {
   const duracionSel = bookTipo === 'manicura' ? servicioSel?.duracion_minutes ?? 60 : 60
   const prepSel = bookTipo === 'manicura' ? buffers.manicura : buffers.podologia
 
-  // Horas de inicio válidas dentro del rango elegido
-  const horasPosibles: string[] = []
+  // Horas válidas para el servicio elegido EN TODO EL DÍA.
+  // Así, si el servicio no cabe en el tramo donde hiciste click, igual se
+  // ofrecen los demás horarios libres de la jornada.
+  const horasDia: { min: number; hhmm: string; enTramo: boolean }[] = []
   if (bookSlot) {
-    for (let t = bookSlot.rangeStart; t + duracionSel <= bookSlot.rangeEnd; t += PASO_MIN) {
-      horasPosibles.push(toHHMM(t))
+    const ahora = new Date()
+    const nowMin = ahora.getHours() * 60 + ahora.getMinutes()
+    const esHoy = bookSlot.date === todayIso
+    for (const b of bookSlot.info.bloques) {
+      for (let t = b.start; t + duracionSel <= b.end; t += PASO_MIN) {
+        if (esHoy && t <= nowMin) continue
+        const finConPrep = t + duracionSel + prepSel
+        if (bookSlot.info.busy.some((x: any) => overlaps(t, finConPrep, x.start, x.end))) continue
+        horasDia.push({
+          min: t,
+          hhmm: toHHMM(t),
+          enTramo: t >= bookSlot.rangeStart && t + duracionSel <= bookSlot.rangeEnd,
+        })
+      }
     }
+    horasDia.sort((a, b) => a.min - b.min)
   }
+  const horasPosibles = horasDia.map((h) => h.hhmm)
+  const cabeEnTramo = horasDia.some((h) => h.enTramo)
 
-  // Al cambiar el servicio, ajustar la hora elegida si ya no es válida
+  // Al cambiar el servicio, elegir la mejor hora disponible
   useEffect(() => {
     if (!bookSlot) return
-    if (horasPosibles.length === 0) {
+    if (horasDia.length === 0) {
       setBookTime('')
     } else if (!horasPosibles.includes(bookTime)) {
-      setBookTime(horasPosibles[0])
+      setBookTime(horasDia.find((h) => h.enTramo)?.hhmm ?? horasDia[0].hhmm)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookSlot, duracionSel])
@@ -553,31 +570,50 @@ export default function AdminAgendaPage() {
               </select>
             )}
 
-            {/* Hora de inicio dentro del tramo */}
+            {/* Hora de inicio: todas las del día donde cabe el servicio */}
             <p className="text-xs font-bold uppercase tracking-wide text-tinta-suave mt-4 mb-2">
               Hora de inicio ({dur(duracionSel)} + {prepSel} min de preparación)
             </p>
-            {horasPosibles.length === 0 ? (
+            {horasDia.length === 0 ? (
               <p className="text-sm text-orange-600 bg-orange-50 p-3 rounded-xl">
-                Este servicio de {dur(duracionSel)} no cabe en este tramo. Elige otro servicio o
-                tramo.
+                No queda ningún espacio de {dur(duracionSel)} este día. Elige otro servicio u otro
+                día.
               </p>
             ) : (
-              <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto">
-                {horasPosibles.map((h) => (
-                  <button
-                    key={h}
-                    onClick={() => setBookTime(h)}
-                    className={`px-2 py-1.5 rounded-lg text-sm font-semibold border transition ${
-                      bookTime === h
-                        ? 'bg-tinta text-marfil border-tinta'
-                        : 'bg-white text-foreground border-arena hover:border-tinta-suave'
-                    }`}
-                  >
-                    {h}
-                  </button>
-                ))}
-              </div>
+              <>
+                {!cabeEnTramo && (
+                  <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 mb-2">
+                    En el tramo {toHHMM(bookSlot.rangeStart)}–{toHHMM(bookSlot.rangeEnd)} no caben{' '}
+                    {dur(duracionSel)}, pero sí en estos horarios del día 👇
+                  </p>
+                )}
+                <div className="grid grid-cols-4 gap-2 max-h-44 overflow-y-auto">
+                  {horasDia.map((h) => (
+                    <button
+                      key={h.hhmm}
+                      onClick={() => setBookTime(h.hhmm)}
+                      title={
+                        h.enTramo
+                          ? 'Dentro del tramo que elegiste'
+                          : 'Otro horario libre del día'
+                      }
+                      className={`px-2 py-1.5 rounded-lg text-sm font-semibold border transition ${
+                        bookTime === h.hhmm
+                          ? 'bg-tinta text-marfil border-tinta'
+                          : h.enTramo
+                          ? 'bg-salvia/10 text-tinta border-salvia/50 hover:border-salvia'
+                          : 'bg-white text-foreground border-arena hover:border-tinta-suave'
+                      }`}
+                    >
+                      {h.hhmm}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1.5">
+                  {bookTime && `Terminaría a las ${toHHMM(toMin(bookTime) + duracionSel)}. `}
+                  Los horarios en verde están dentro del tramo que elegiste.
+                </p>
+              </>
             )}
 
             <input type="text" value={bookSearch} onChange={(e) => setBookSearch(e.target.value)} placeholder="🔍 Buscar paciente por nombre, RUT o teléfono..." className="w-full mt-4 px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
