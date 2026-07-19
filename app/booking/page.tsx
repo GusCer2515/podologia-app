@@ -29,6 +29,19 @@ export default function BookingPage() {
     getClinicInfo().then(setClinic).catch(() => {})
   }, [])
 
+  // Si llega desde el aviso de horas liberadas (?fecha=&hora=), se
+  // precarga esa hora. Se lee de la URL directamente para que la página
+  // siga siendo estática (useSearchParams obligaría a un Suspense).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    const fecha = p.get('fecha')
+    const hora = p.get('hora')
+    if (!fecha) return
+    setFormData((prev) => ({ ...prev, date: fecha, time: hora ?? '' }))
+    loadSlots(fecha)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',

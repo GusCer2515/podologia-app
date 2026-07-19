@@ -243,6 +243,33 @@ export default function Conciliacion() {
     }
   }
 
+  // Pago en efectivo: la atención se cobró, pero nunca aparecerá en la
+  // cartola. Se marca a mano para que no quede como pendiente.
+  const toggleEfectivo = async (att: any) => {
+    const nuevo = !att.pago_efectivo
+    try {
+      await updateAttention(att.id, {
+        pago_efectivo: nuevo,
+        pago_efectivo_fecha: nuevo ? new Date().toISOString() : null,
+      })
+      setAttentions((prev) =>
+        prev.map((a) =>
+          a.id === att.id
+            ? { ...a, pago_efectivo: nuevo, pago_efectivo_fecha: nuevo ? new Date().toISOString() : null }
+            : a
+        )
+      )
+      showToast(nuevo ? `Marcada como pagada en efectivo 💵` : 'Marca de efectivo quitada')
+    } catch (err) {
+      console.error(err)
+      showToast('Error guardando el pago en efectivo', 'error')
+    }
+  }
+
+  const marcarTodoEfectivo = async () => {
+    for (const a of sinRespaldo) await toggleEfectivo(a)
+  }
+
   const toggleBoleta = async (att: any) => {
     const nuevo = !att.boleta_emitida
     try {
@@ -313,6 +340,39 @@ export default function Conciliacion() {
         }
       }
 
+      // Hoja aparte con lo cobrado en efectivo: nunca aparece en la cartola,
+      // pero igual hay que contabilizarlo
+      if (enEfectivo.length > 0) {
+        const wsEf = wb.addWorksheet('Efectivo')
+        wsEf.columns = [
+          { header: 'Fecha atención', key: 'fecha', width: 14 },
+          { header: 'Paciente', key: 'paciente', width: 34 },
+          { header: 'Convenio', key: 'convenio', width: 20 },
+          { header: 'Monto $', key: 'monto', width: 12 },
+          { header: 'Boleta emitida', key: 'boleta', width: 14 },
+        ]
+        wsEf.getRow(1).font = { bold: true }
+        wsEf.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } }
+
+        for (const a of enEfectivo) {
+          const row = wsEf.addRow({
+            fecha: fmtDia(a.fecha),
+            paciente: a.patients?.name ?? '—',
+            convenio: a.patients?.insurance || 'Particular',
+            monto: valorDe(a),
+            boleta: a.boleta_emitida ? 'Sí' : 'Pendiente',
+          })
+          row.getCell('monto').numFmt = '#,##0'
+          row.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE0B2' } }
+          })
+        }
+
+        const total = wsEf.addRow({ paciente: 'TOTAL EFECTIVO', monto: totalEfectivo })
+        total.font = { bold: true }
+        total.getCell('monto').numFmt = '#,##0'
+      }
+
       const buf = await wb.xlsx.writeBuffer()
       const blob = new Blob([buf], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -343,6 +403,12 @@ export default function Conciliacion() {
   const conciliadasCount = attentions.filter((a) => a.transfer_id).length
   const totalRecibido = transfers.reduce((s, t) => s + t.monto, 0)
   const completas = transfers.filter((t) => estadoTransfer(t) === 'completa').length
+  // Atenciones ya cobradas en efectivo (no están ni estarán en la cartola)
+  const enEfectivo = attentions.filter((a) => !a.transfer_id && a.pago_efectivo)
+  const totalEfectivo = enEfectivo.reduce((s, a) => s + valorDe(a), 0)
+  // Ni transferencia ni efectivo: son las que hay que revisar
+  const sinRespaldo = attentions.filter((a) => !a.transfer_id && !a.pago_efectivo)
+  const totalSinRespaldo = sinRespaldo.reduce((s, a) => s + valorDe(a), 0)
 
   const ESTILO_TRANSFER: Record<string, string> = {
     libre: 'bg-white border-arena hover:border-tinta-suave cursor-grab',
@@ -361,7 +427,8 @@ export default function Conciliacion() {
         <strong>toca la transferencia</strong> y luego <strong>“Asociar aquí”</strong> en la
         atención que corresponda. En computador también puedes arrastrarla. Una misma
         transferencia puede cubrir <strong>varias atenciones</strong> (ej: alguien que paga por sí
-        misma y por su mamá). El archivo se procesa solo en este dispositivo.
+        misma y por su mamá). Lo que no tenga depósito puede marcarse como{' '}
+        <strong>💵 pago en efectivo</strong>. El archivo se procesa solo en este dispositivo.
       </p>
 
       <input
@@ -394,6 +461,57 @@ export default function Conciliacion() {
               <p className="text-xs text-gray-500">Total recibido</p>
             </div>
           </div>
+
+          {/* Efectivo vs. pendiente de revisar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-[#d9a441]/10 border border-[#d9a441]/40 rounded-xl p-3 text-center">
+              <p className="text-2xl font-bold text-[#8a6520]">{fmtCLP(totalEfectivo)}</p>
+              <p className="text-xs text-gray-600">
+                💵 En efectivo ({enEfectivo.length} atenciones)
+              </p>
+            </div>
+            <div className="bg-white border border-arena rounded-xl p-3 text-center">
+              <p className="text-2xl font-bold text-salvia">
+                {fmtCLP(
+                  attentions.filter((a) => a.transfer_id).reduce((s, a) => s + valorDe(a), 0) +
+                    totalEfectivo
+                )}
+              </p>
+              <p className="text-xs text-gray-600">✅ Total cobrado y respaldado</p>
+            </div>
+            <div
+              className={`rounded-xl p-3 text-center border ${
+                sinRespaldo.length > 0
+                  ? 'bg-rosa-palo/40 border-rosa/50'
+                  : 'bg-white border-arena'
+              }`}
+            >
+              <p className="text-2xl font-bold text-rosa">{fmtCLP(totalSinRespaldo)}</p>
+              <p className="text-xs text-gray-600">
+                ⚠️ Sin respaldo ({sinRespaldo.length} atenciones)
+              </p>
+            </div>
+          </div>
+
+          {sinRespaldo.length > 0 && (
+            <div className="bg-[#d9a441]/10 border border-[#d9a441]/40 rounded-xl p-4 text-sm">
+              <p className="text-tinta">
+                <strong>💵 ¿Hay pagos en efectivo?</strong> Quedan{' '}
+                <strong>{sinRespaldo.length} atenciones</strong> sin depósito en la cartola
+                ({fmtCLP(totalSinRespaldo)}). Si se pagaron en efectivo, márcalas para que
+                queden contabilizadas y dejen de figurar como pendientes.
+              </p>
+              <button
+                onClick={marcarTodoEfectivo}
+                className="mt-3 bg-[#d9a441] text-white px-5 py-2 rounded-full text-sm font-bold hover:opacity-90 transition"
+              >
+                💵 Marcar las {sinRespaldo.length} como pagadas en efectivo
+              </button>
+              <p className="text-xs text-gray-500 mt-2">
+                También puedes marcarlas una por una en la lista de atenciones.
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             {Object.keys(sugerencias).length > 0 && (
@@ -492,6 +610,8 @@ export default function Conciliacion() {
                         className={`px-3 py-2 rounded-xl border text-sm transition ${
                           a.transfer_id
                             ? 'bg-salvia/10 border-salvia/40'
+                            : a.pago_efectivo
+                            ? 'bg-[#d9a441]/10 border-[#d9a441]/40'
                             : sugerida
                             ? 'bg-yellow-50 border-yellow-300'
                             : 'bg-white border-arena border-dashed'
@@ -526,6 +646,27 @@ export default function Conciliacion() {
                               🔓 Deshacer
                             </button>
                           </div>
+                        ) : a.pago_efectivo ? (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                            <span className="text-[#8a6520] font-semibold">
+                              💵 Pagada en efectivo ({fmtCLP(valorDe(a))})
+                            </span>
+                            <label className="flex items-center gap-1 cursor-pointer font-semibold text-tinta">
+                              <input
+                                type="checkbox"
+                                checked={!!a.boleta_emitida}
+                                onChange={() => toggleBoleta(a)}
+                                className="w-3.5 h-3.5 accent-[#7d8f6f]"
+                              />
+                              Boleta emitida
+                            </label>
+                            <button
+                              onClick={() => toggleEfectivo(a)}
+                              className="text-rosa hover:underline font-semibold"
+                            >
+                              🔓 Deshacer
+                            </button>
+                          </div>
                         ) : sugerida ? (
                           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
                             <span className="text-yellow-700">
@@ -538,18 +679,29 @@ export default function Conciliacion() {
                               ✔ Aceptar
                             </button>
                           </div>
-                        ) : selectedKey ? (
-                          <button
-                            onClick={() => {
-                              const t = transferByKey(selectedKey)
-                              if (t) vincular(t, a)
-                            }}
-                            className="mt-1.5 bg-tinta text-marfil px-3 py-0.5 rounded-full text-xs font-bold hover:bg-tinta-suave transition"
-                          >
-                            ⬇ Asociar aquí
-                          </button>
                         ) : (
-                          <p className="mt-1 text-xs text-gray-400">Sin pago asociado</p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                            {selectedKey ? (
+                              <button
+                                onClick={() => {
+                                  const t = transferByKey(selectedKey)
+                                  if (t) vincular(t, a)
+                                }}
+                                className="bg-tinta text-marfil px-3 py-0.5 rounded-full font-bold hover:bg-tinta-suave transition"
+                              >
+                                ⬇ Asociar aquí
+                              </button>
+                            ) : (
+                              <span className="text-gray-400">Sin pago asociado</span>
+                            )}
+                            <button
+                              onClick={() => toggleEfectivo(a)}
+                              className="bg-[#d9a441] text-white px-3 py-0.5 rounded-full font-bold hover:opacity-90 transition"
+                              title="No aparece en la cartola porque se pagó en efectivo"
+                            >
+                              💵 Pagó en efectivo
+                            </button>
+                          </div>
                         )}
                       </div>
                     )

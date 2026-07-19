@@ -71,6 +71,14 @@ export async function getOccupiedSlots(date: string) {
   return (data ?? []) as { slot: string }[]
 }
 
+// Horas que quedaron libres porque alguien canceló (solo la hora, sin
+// datos del paciente: esto lo consulta también el sitio público)
+export async function getFreedSlots(date: string) {
+  const { data, error } = await supabase.rpc('get_freed_slots', { p_date: date })
+  if (error) throw error
+  return (data ?? []) as { slot: string; cancelled_at: string }[]
+}
+
 export async function getAvailability() {
   const { data, error } = await supabase
     .from('availability')
