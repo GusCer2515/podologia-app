@@ -17,6 +17,15 @@ const fmtCLP = (n: number) =>
 const inputClass =
   'px-3 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave'
 
+// Duraciones de 15 min hasta 4 horas (para bloques mixtos como "Esmaltado + Pedicura")
+const DURACIONES = Array.from({ length: 16 }, (_, i) => (i + 1) * 15)
+const etiquetaDuracion = (m: number) => {
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60)
+  const r = m % 60
+  return r === 0 ? `${h} h` : `${h} h ${r} min`
+}
+
 export default function NailsPage() {
   const [services, setServices] = useState<any[]>([])
   const [citasMes, setCitasMes] = useState<any[]>([])
@@ -162,10 +171,11 @@ export default function NailsPage() {
           <label className="text-xs text-gray-500">
             Duración
             <select value={duracion} onChange={(e) => setDuracion(e.target.value)} className={`block mt-1 ${inputClass}`}>
-              <option value="30">30 min</option>
-              <option value="60">60 min</option>
-              <option value="90">90 min</option>
-              <option value="120">120 min</option>
+              {DURACIONES.map((m) => (
+                <option key={m} value={m}>
+                  {etiquetaDuracion(m)}
+                </option>
+              ))}
             </select>
           </label>
           <button
@@ -290,11 +300,11 @@ function ServiceRow({ service, reload }: { service: any; reload: () => void }) {
           onChange={(e) => setDuracion(e.target.value)}
           className="px-3 py-1.5 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave"
         >
-          <option value="30">30 min</option>
-          <option value="60">60 min</option>
-          <option value="90">90 min</option>
-          <option value="120">120 min</option>
-          <option value="150">150 min</option>
+          {DURACIONES.map((m) => (
+            <option key={m} value={m}>
+              {etiquetaDuracion(m)}
+            </option>
+          ))}
         </select>
       </td>
       <td className="px-4 py-2 text-right whitespace-nowrap">

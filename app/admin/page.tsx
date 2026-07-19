@@ -11,7 +11,7 @@ import {
   adminCreateAppointment,
   getNailServices,
 } from '@/lib/supabase'
-import { todayLocalStr } from '@/lib/slots'
+import { todayLocalStr, getBuffers, bufferDe, PASO_MIN, type Buffers } from '@/lib/slots'
 import { initials, colorFor } from '@/lib/avatar'
 import { showToast } from '@/components/toast'
 
@@ -48,6 +48,7 @@ export default function AdminAgendaPage() {
   const [availability, setAvailability] = useState<any[]>([])
   const [patients, setPatients] = useState<any[]>([])
   const [nailServices, setNailServices] = useState<any[]>([])
+  const [buffers, setBuffers] = useState<Buffers>({ podologia: 15, manicura: 10 })
   const [loading, setLoading] = useState(true)
   const [filtro, setFiltro] = useState<'todo' | 'podologia' | 'manicura'>('todo')
 
@@ -90,6 +91,7 @@ export default function AdminAgendaPage() {
   useEffect(() => {
     getPatients().then((p) => setPatients(p || [])).catch(() => {})
     getNailServices(true).then((s) => setNailServices(s || [])).catch(() => {})
+    getBuffers().then(setBuffers).catch(() => {})
   }, [])
 
   const changeWeek = (delta: number) => {
@@ -120,10 +122,12 @@ export default function AdminAgendaPage() {
       return
     }
 
-    // Validar que el servicio CABE en ese horario (punto 8)
+    // Validar que el servicio CABE (incluyendo el tiempo de preparación posterior)
     const info = bookSlot.info
+    const prep = bookTipo === 'manicura' ? buffers.manicura : buffers.podologia
     const startMin = toMin(bookSlot.time)
     const endMin = startMin + duration
+    const endConPrep = endMin + prep
     if (endMin > info.end) {
       showToast(`El servicio de ${duration} min no cabe: supera el horario de cierre`, 'error')
       return
@@ -132,8 +136,11 @@ export default function AdminAgendaPage() {
       showToast(`El servicio de ${duration} min choca con el horario de almuerzo`, 'error')
       return
     }
-    if (info.busy.some((b: any) => overlaps(startMin, endMin, b.start, b.end))) {
-      showToast(`El servicio de ${duration} min choca con otra cita (dura hasta ${toHHMM(endMin)})`, 'error')
+    if (info.busy.some((b: any) => overlaps(startMin, endConPrep, b.start, b.end))) {
+      showToast(
+        `No cabe: termina ${toHHMM(endMin)} y con ${prep} min de preparación llega a ${toHHMM(endConPrep)}, chocando con la siguiente cita`,
+        'error'
+      )
       return
     }
 
@@ -185,9 +192,10 @@ export default function AdminAgendaPage() {
     const end = config ? toMin(String(config.end_time).substring(0, 5)) : 0
     const lunchStart = config?.lunch_start ? toMin(String(config.lunch_start).substring(0, 5)) : null
     const lunchEnd = config?.lunch_end ? toMin(String(config.lunch_end).substring(0, 5)) : null
+    // Cada cita ocupa su duración + el tiempo de preparación posterior
     const busy = activas.map((a) => {
       const t = toMin(String(a.appointment_date).substring(11, 16))
-      return { start: t, end: t + (a.duration_minutes || 60) }
+      return { start: t, end: t + (a.duration_minutes || 60) + bufferDe(a.tipo, buffers) }
     })
     const info = { start, end, lunchStart, lunchEnd, busy }
 
@@ -198,8 +206,8 @@ export default function AdminAgendaPage() {
     // Cupos libres + cuántos minutos seguidos hay disponibles desde cada uno
     const freeSlots: { time: string; gap: number }[] = []
     if (config && !blocked) {
-      for (let t = start; t + 30 <= end; t += 30) {
-        const cellEnd = t + 30
+      for (let t = start; t + PASO_MIN <= end; t += PASO_MIN) {
+        const cellEnd = t + PASO_MIN
         if (lunchStart != null && overlaps(t, cellEnd, lunchStart, lunchEnd!)) continue
         if (busy.some((b) => overlaps(t, cellEnd, b.start, b.end))) continue
         if (isToday && t <= nowMin) continue
@@ -214,7 +222,7 @@ export default function AdminAgendaPage() {
     }
 
     // Minutos libres del día (para KPI/alerta de capacidad)
-    const freeMin = freeSlots.length * 30
+    const freeMin = freeSlots.length * PASO_MIN
 
     return {
       name: DAY_NAMES[i],

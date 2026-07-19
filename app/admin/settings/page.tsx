@@ -18,6 +18,7 @@ import { showToast } from '@/components/toast'
 import { CLINIC, getClinicInfo, clearClinicInfoCache, type ClinicInfo } from '@/lib/clinicConfig'
 import { getAppointmentsBetween } from '@/lib/supabase'
 import ReagendarWizard from '@/components/ReagendarWizard'
+import { clearBuffersCache } from '@/lib/slots'
 
 // day_of_week: 0=Domingo ... 6=Sábado (orden visual Lun→Dom)
 const DIAS = [
@@ -49,6 +50,10 @@ export default function SettingsPage() {
   const [precioParticular, setPrecioParticular] = useState('30000')
   const [loading, setLoading] = useState(true)
   const [savingHours, setSavingHours] = useState(false)
+  // Tiempos de preparación entre atenciones
+  const [bufPod, setBufPod] = useState('15')
+  const [bufMan, setBufMan] = useState('10')
+  const [savingBuffers, setSavingBuffers] = useState(false)
   const [savingPrecio, setSavingPrecio] = useState(false)
   const [newBlockDate, setNewBlockDate] = useState('')
   const [newBlockNote, setNewBlockNote] = useState('')
@@ -59,12 +64,16 @@ export default function SettingsPage() {
 
   const load = async () => {
     // Cada recurso se carga por separado: si uno falla, el resto funciona
-    const [avail, blocks, convs, precio] = await Promise.all([
+    const [avail, blocks, convs, precio, bp, bm] = await Promise.all([
       getAllAvailability().catch(() => []),
       getBlockouts().catch(() => []),
       getConvenios().catch(() => null), // null = tabla no existe aún
       getSetting('precio_particular').catch(() => null),
+      getSetting('buffer_podologia').catch(() => null),
+      getSetting('buffer_manicura').catch(() => null),
     ])
+    if (bp) setBufPod(bp)
+    if (bm) setBufMan(bm)
 
     const map: Record<number, DayConfig> = {}
     for (const d of DIAS) {
@@ -120,6 +129,27 @@ export default function SettingsPage() {
       showToast('Error guardando los horarios', 'error')
     } finally {
       setSavingHours(false)
+    }
+  }
+
+  const saveBuffers = async () => {
+    const p = parseInt(bufPod, 10)
+    const m = parseInt(bufMan, 10)
+    if (isNaN(p) || p < 0 || isNaN(m) || m < 0) {
+      showToast('Ingresa minutos válidos', 'error')
+      return
+    }
+    setSavingBuffers(true)
+    try {
+      await saveSetting('buffer_podologia', String(p))
+      await saveSetting('buffer_manicura', String(m))
+      clearBuffersCache()
+      showToast('Tiempos de preparación guardados')
+    } catch (err) {
+      console.error(err)
+      showToast('Error guardando (¿ejecutaste el SQL de fase 22?)', 'error')
+    } finally {
+      setSavingBuffers(false)
     }
   }
 
@@ -355,6 +385,54 @@ export default function SettingsPage() {
         >
           {savingHours ? 'Guardando...' : '💾 Guardar horarios'}
         </button>
+
+        {/* Tiempo de preparación entre atenciones */}
+        <div className="mt-6 pt-5 border-t border-arena">
+          <p className="font-bold text-tinta text-sm">🧼 Tiempo de preparación entre atenciones</p>
+          <p className="text-xs text-gray-500 mb-3">
+            Minutos que quedan reservados después de cada atención para limpiar y preparar la
+            consulta. Nadie puede tomar hora en ese rato.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-xs text-gray-500">
+              🦶 Después de podología
+              <div className="flex items-center gap-1 mt-1">
+                <input
+                  type="number"
+                  min={0}
+                  max={60}
+                  step={5}
+                  value={bufPod}
+                  onChange={(e) => setBufPod(e.target.value)}
+                  className={`w-20 ${inputClass}`}
+                />
+                <span className="text-tinta font-semibold">min</span>
+              </div>
+            </label>
+            <label className="text-xs text-gray-500">
+              💅 Después de manicura
+              <div className="flex items-center gap-1 mt-1">
+                <input
+                  type="number"
+                  min={0}
+                  max={60}
+                  step={5}
+                  value={bufMan}
+                  onChange={(e) => setBufMan(e.target.value)}
+                  className={`w-20 ${inputClass}`}
+                />
+                <span className="text-tinta font-semibold">min</span>
+              </div>
+            </label>
+            <button
+              onClick={saveBuffers}
+              disabled={savingBuffers}
+              className="bg-salvia text-marfil px-6 py-2 rounded-full font-bold hover:opacity-90 transition disabled:opacity-50"
+            >
+              {savingBuffers ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </div>
       </section>
 
       {/* ================= VALORES DE ATENCIÓN ================= */}
