@@ -79,6 +79,8 @@ export default function AdminAgendaPage() {
   const [bookTipo, setBookTipo] = useState<'podologia' | 'manicura'>('podologia')
   const [bookServiceId, setBookServiceId] = useState('')
   const [savingBook, setSavingBook] = useState(false)
+  // El admin confirma agendar sin tiempo de preparación
+  const [aceptaAjustado, setAceptaAjustado] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<any>(null)
 
   const todayIso = todayLocalStr()
@@ -137,7 +139,9 @@ export default function AdminAgendaPage() {
   // Horas válidas para el servicio elegido EN TODO EL DÍA.
   // Así, si el servicio no cabe en el tramo donde hiciste click, igual se
   // ofrecen los demás horarios libres de la jornada.
-  const horasDia: { min: number; hhmm: string; enTramo: boolean }[] = []
+  // estado 'ok' = cabe con preparación · 'ajustado' = la atención cabe pero
+  // queda sin tiempo de preparación (solo el admin puede forzarlo)
+  const horasDia: { min: number; hhmm: string; enTramo: boolean; estado: 'ok' | 'ajustado' }[] = []
   if (bookSlot) {
     const ahora = new Date()
     const nowMin = ahora.getHours() * 60 + ahora.getMinutes()
@@ -145,27 +149,40 @@ export default function AdminAgendaPage() {
     for (const b of bookSlot.info.bloques) {
       for (let t = b.start; t + duracionSel <= b.end; t += PASO_MIN) {
         if (esHoy && t <= nowMin) continue
-        const finConPrep = t + duracionSel + prepSel
-        if (bookSlot.info.busy.some((x: any) => overlaps(t, finConPrep, x.start, x.end))) continue
+        const fin = t + duracionSel
+        // La atención en sí NO puede pisar otra cita
+        if (bookSlot.info.busyRaw.some((x: any) => overlaps(t, fin, x.start, x.end))) continue
+        const chocaPrep = bookSlot.info.busy.some((x: any) =>
+          overlaps(t, fin + prepSel, x.start, x.end)
+        )
         horasDia.push({
           min: t,
           hhmm: toHHMM(t),
-          enTramo: t >= bookSlot.rangeStart && t + duracionSel <= bookSlot.rangeEnd,
+          enTramo: t >= bookSlot.rangeStart && fin <= bookSlot.rangeEnd,
+          estado: chocaPrep ? 'ajustado' : 'ok',
         })
       }
     }
     horasDia.sort((a, b) => a.min - b.min)
   }
   const horasPosibles = horasDia.map((h) => h.hhmm)
-  const cabeEnTramo = horasDia.some((h) => h.enTramo)
+  const cabeEnTramo = horasDia.some((h) => h.enTramo && h.estado === 'ok')
+  const horaSel = horasDia.find((h) => h.hhmm === bookTime)
+  const esAjustado = horaSel?.estado === 'ajustado'
 
-  // Al cambiar el servicio, elegir la mejor hora disponible
+  // Al cambiar el servicio, elegir la mejor hora disponible (prefiere las 'ok')
   useEffect(() => {
     if (!bookSlot) return
+    setAceptaAjustado(false)
     if (horasDia.length === 0) {
       setBookTime('')
     } else if (!horasPosibles.includes(bookTime)) {
-      setBookTime(horasDia.find((h) => h.enTramo)?.hhmm ?? horasDia[0].hhmm)
+      const mejor =
+        horasDia.find((h) => h.enTramo && h.estado === 'ok') ??
+        horasDia.find((h) => h.estado === 'ok') ??
+        horasDia.find((h) => h.enTramo) ??
+        horasDia[0]
+      setBookTime(mejor.hhmm)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookSlot, duracionSel])
@@ -206,11 +223,15 @@ export default function AdminAgendaPage() {
       )
       return
     }
-    if (info.busy.some((b: any) => overlaps(startMin, endConPrep, b.start, b.end))) {
-      showToast(
-        `No cabe: termina ${toHHMM(endMin)} y con ${prepSel} min de preparación llega a ${toHHMM(endConPrep)}`,
-        'error'
-      )
+    // La atención nunca puede pisar otra cita
+    if (info.busyRaw.some((b: any) => overlaps(startMin, endMin, b.start, b.end))) {
+      showToast(`Ese horario choca con otra cita (terminaría ${toHHMM(endMin)})`, 'error')
+      return
+    }
+    // Si solo choca la preparación, el admin debe confirmarlo
+    const chocaPrep = info.busy.some((b: any) => overlaps(startMin, endConPrep, b.start, b.end))
+    if (chocaPrep && !aceptaAjustado) {
+      showToast('Marca la casilla para agendar sin tiempo de preparación', 'error')
       return
     }
 
@@ -265,7 +286,15 @@ export default function AdminAgendaPage() {
       })
       .sort((a, b) => a.start - b.start)
 
-    const info = { bloques, busy }
+    // Ocupación REAL (sin preparación): permite al admin apretar una cita
+    const busyRaw = activas
+      .map((a) => {
+        const t = toMin(String(a.appointment_date).substring(11, 16))
+        return { start: t, end: t + (a.duration_minutes || 60) }
+      })
+      .sort((a, b) => a.start - b.start)
+
+    const info = { bloques, busy, busyRaw }
 
     const now = new Date()
     const nowMin = now.getHours() * 60 + now.getMinutes()
@@ -591,28 +620,54 @@ export default function AdminAgendaPage() {
                   {horasDia.map((h) => (
                     <button
                       key={h.hhmm}
-                      onClick={() => setBookTime(h.hhmm)}
+                      onClick={() => {
+                        setBookTime(h.hhmm)
+                        setAceptaAjustado(false)
+                      }}
                       title={
-                        h.enTramo
+                        h.estado === 'ajustado'
+                          ? 'Cabe justo, sin tiempo de preparación'
+                          : h.enTramo
                           ? 'Dentro del tramo que elegiste'
                           : 'Otro horario libre del día'
                       }
                       className={`px-2 py-1.5 rounded-lg text-sm font-semibold border transition ${
                         bookTime === h.hhmm
                           ? 'bg-tinta text-marfil border-tinta'
+                          : h.estado === 'ajustado'
+                          ? 'bg-yellow-50 text-yellow-800 border-yellow-300 hover:border-yellow-500'
                           : h.enTramo
                           ? 'bg-salvia/10 text-tinta border-salvia/50 hover:border-salvia'
                           : 'bg-white text-foreground border-arena hover:border-tinta-suave'
                       }`}
                     >
                       {h.hhmm}
+                      {h.estado === 'ajustado' && <span className="block text-[9px] leading-none">justo</span>}
                     </button>
                   ))}
                 </div>
                 <p className="text-[11px] text-gray-400 mt-1.5">
                   {bookTime && `Terminaría a las ${toHHMM(toMin(bookTime) + duracionSel)}. `}
-                  Los horarios en verde están dentro del tramo que elegiste.
+                  🟢 dentro del tramo · 🟡 cabe justo, sin preparación
                 </p>
+
+                {/* Confirmación para agendar sin tiempo de preparación */}
+                {esAjustado && (
+                  <label className="mt-3 flex items-start gap-2 bg-yellow-50 border border-yellow-300 rounded-xl px-3 py-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={aceptaAjustado}
+                      onChange={(e) => setAceptaAjustado(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 accent-[#d9a441]"
+                    />
+                    <span className="text-xs text-yellow-900">
+                      <strong>Agendar sin tiempo de preparación.</strong> A las {bookTime} la
+                      atención cabe justo hasta{' '}
+                      {toHHMM(toMin(bookTime) + duracionSel)}, pero quedarás sin los {prepSel} min
+                      para limpiar antes de la siguiente cita. Confirmo que quiero agendarla igual.
+                    </span>
+                  </label>
+                )}
               </>
             )}
 
@@ -633,8 +688,18 @@ export default function AdminAgendaPage() {
 
             <input type="text" value={bookNotes} onChange={(e) => setBookNotes(e.target.value)} placeholder="Notas (opcional)" className="w-full mt-3 px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
 
-            <button onClick={confirmBook} disabled={savingBook || !bookPatient || !bookTime} className="mt-4 w-full bg-tinta text-marfil py-3 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50">
-              {savingBook ? 'Agendando...' : bookTime ? `✔ Confirmar a las ${bookTime}` : 'Selecciona la hora'}
+            <button
+              onClick={confirmBook}
+              disabled={savingBook || !bookPatient || !bookTime || (esAjustado && !aceptaAjustado)}
+              className="mt-4 w-full bg-tinta text-marfil py-3 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50"
+            >
+              {savingBook
+                ? 'Agendando...'
+                : esAjustado && !aceptaAjustado
+                ? 'Marca la casilla para continuar'
+                : bookTime
+                ? `✔ Confirmar a las ${bookTime}`
+                : 'Selecciona la hora'}
             </button>
             <button onClick={cerrarModal} className="mt-2 w-full py-2.5 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition">Cancelar</button>
           </div>
