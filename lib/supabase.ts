@@ -497,6 +497,41 @@ export async function uploadDocumentPdf(path: string, blob: Blob) {
 }
 
 // Genera un link firmado temporal (30 días) para compartir el PDF
+// ============================================================
+// DERIVACIONES MÉDICAS
+// ============================================================
+
+export async function getReferrals(patientId: string) {
+  const { data, error } = await supabase
+    .from('referrals')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createReferral(payload: any) {
+  const { error } = await supabase.from('referrals').insert([payload])
+  if (error) throw error
+}
+
+export async function deleteReferral(id: string, pdfPath?: string) {
+  if (pdfPath) await supabase.storage.from('documents').remove([pdfPath])
+  const { error } = await supabase.from('referrals').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ¿El paciente tiene alguna derivación? (para la etiqueta "Derivado")
+export async function countReferrals(patientId: string) {
+  const { count, error } = await supabase
+    .from('referrals')
+    .select('id', { count: 'exact', head: true })
+    .eq('patient_id', patientId)
+  if (error) throw error
+  return count ?? 0
+}
+
 // Elimina el registro y también el PDF del almacenamiento
 export async function deleteDocument(id: string, pdfPath?: string) {
   if (pdfPath) {

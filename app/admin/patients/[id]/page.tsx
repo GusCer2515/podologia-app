@@ -3,10 +3,17 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { getPatient, updatePatient, getPatientAppointments, getConvenios } from '@/lib/supabase'
+import {
+  getPatient,
+  updatePatient,
+  getPatientAppointments,
+  getConvenios,
+  countReferrals,
+} from '@/lib/supabase'
 import ClinicalRecordForm from '@/components/ClinicalRecordForm'
 import AttentionsTab from '@/components/AttentionsTab'
 import DocumentsTab from '@/components/DocumentsTab'
+import ReferralsTab from '@/components/ReferralsTab'
 import AdminScheduler from '@/components/AdminScheduler'
 import { showToast } from '@/components/toast'
 
@@ -16,6 +23,7 @@ const TABS = [
   { key: 'ficha', label: '🩺 Ficha Clínica' },
   { key: 'atenciones', label: '📝 Atenciones' },
   { key: 'documentos', label: '📄 Documentos' },
+  { key: 'derivacion', label: '🏥 Derivación Médica' },
 ]
 
 const STATUS_LABEL: Record<string, string> = {
@@ -51,6 +59,8 @@ export default function PatientDetailPage() {
   // Agendador admin: false = cerrado, null = nueva cita, objeto = reagendar esa cita
   const [scheduler, setScheduler] = useState<any>(false)
   const [citasFiltro, setCitasFiltro] = useState<'todo' | 'podologia' | 'manicura'>('todo')
+  // Cantidad de derivaciones: si hay al menos una, el paciente se marca como DERIVADO
+  const [derivaciones, setDerivaciones] = useState(0)
 
   const reloadAppointments = () => {
     getPatientAppointments(patientId)
@@ -64,12 +74,14 @@ export default function PatientDetailPage() {
       getPatient(patientId),
       getPatientAppointments(patientId).catch(() => []),
       getConvenios().catch(() => []),
+      countReferrals(patientId).catch(() => 0),
     ])
-      .then(([p, appts, convs]) => {
+      .then(([p, appts, convs, derivs]) => {
         setPatient(p)
         setForm(p)
         setAppointments(appts || [])
         setConvenios(convs || [])
+        setDerivaciones(derivs || 0)
       })
       .catch(console.error)
       .finally(() => setLoading(false))
@@ -134,8 +146,17 @@ export default function PatientDetailPage() {
                 {initials(patient.name)}
               </span>
               <div>
-                <h1 className="font-display text-3xl text-tinta font-medium leading-tight">
+                <h1 className="font-display text-3xl text-tinta font-medium leading-tight flex flex-wrap items-center gap-2">
                   {patient.name}
+                  {derivaciones > 0 && (
+                    <button
+                      onClick={() => setTab('derivacion')}
+                      title="Ver los informes de derivación de este paciente"
+                      className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide bg-[#a37cc4]/15 text-[#7c5a99] border border-[#a37cc4]/40 hover:bg-[#a37cc4]/25 transition"
+                    >
+                      🏥 Derivado
+                    </button>
+                  )}
                 </h1>
                 <p className="text-sm text-gray-500">
                   {patient.rut || 'Sin RUT'} · {patient.phone || 'Sin teléfono'} · {patient.email}
@@ -359,6 +380,11 @@ export default function PatientDetailPage() {
 
       {/* Tab: Documentos */}
       {tab === 'documentos' && <DocumentsTab patient={patient} />}
+
+      {/* Tab: Derivación Médica */}
+      {tab === 'derivacion' && (
+        <ReferralsTab patient={patient} onChange={setDerivaciones} />
+      )}
     </div>
   )
 }
