@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   getReferrals,
   createReferral,
+  updateReferral,
   deleteReferral,
+  deleteDocumentPdf,
   uploadDocumentPdf,
   getDocumentSignedUrl,
   getClinicalRecord,
@@ -110,6 +112,35 @@ export default function ReferralsTab({
     return detalle ? `${form.categoria} — ${detalle}` : form.categoria
   }
 
+  // Arma el PDF con los datos clínicos actuales. `fechaEmision` se pasa al
+  // regenerar un informe antiguo para no cambiarle la fecha original.
+  const construirPdf = async (
+    datos: { dirigidoA: string; motivo: string; sugerencia?: string; proximoControl?: string },
+    fechaEmision?: string
+  ) => {
+    const { generateReferralPdf } = await import('@/lib/pdfReferral')
+    return generateReferralPdf({
+      patientName: patient.name,
+      patientRut: patient.rut || '',
+      patientAge: computeAge(patient.date_of_birth),
+      patientPhone: patient.phone || '',
+      dirigidoA: datos.dirigidoA,
+      motivo: datos.motivo,
+      sugerencia: datos.sugerencia || '',
+      proximoControl: datos.proximoControl || '',
+      fechaEmision,
+      antecedentes,
+      evaluacionPie: evaluacion,
+      diagnostico,
+      tratamiento,
+      recomendaciones,
+      fechaUltimaAtencion: ultima
+        ? new Date(ultima.fecha + 'T00:00:00').toLocaleDateString('es-CL')
+        : '',
+      observaciones: ultima?.observaciones || record?.observaciones || '',
+    })
+  }
+
   const save = async () => {
     if (!form.motivo?.trim()) {
       showToast('Explica el motivo de la derivación', 'error')
@@ -120,25 +151,11 @@ export default function ReferralsTab({
       const dirigidoA = destinatario()
 
       // 1. Generar el informe en PDF
-      const { generateReferralPdf } = await import('@/lib/pdfReferral')
-      const blob = await generateReferralPdf({
-        patientName: patient.name,
-        patientRut: patient.rut || '',
-        patientAge: computeAge(patient.date_of_birth),
-        patientPhone: patient.phone || '',
+      const blob = await construirPdf({
         dirigidoA,
         motivo: form.motivo.trim(),
-        sugerencia: form.sugerencia?.trim() || '',
-        proximoControl: form.proximo_control?.trim() || '',
-        antecedentes,
-        evaluacionPie: evaluacion,
-        diagnostico,
-        tratamiento,
-        recomendaciones,
-        fechaUltimaAtencion: ultima
-          ? new Date(ultima.fecha + 'T00:00:00').toLocaleDateString('es-CL')
-          : '',
-        observaciones: ultima?.observaciones || record?.observaciones || '',
+        sugerencia: form.sugerencia?.trim(),
+        proximoControl: form.proximo_control?.trim(),
       })
 
       // 2. Subir al almacenamiento privado
@@ -164,6 +181,42 @@ export default function ReferralsTab({
       console.error(err)
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Vuelve a generar el PDF de una derivación ya creada. Sirve para las
+  // emitidas antes de un cambio de formato, o si se corrigió la ficha.
+  const regenerar = async (ref: any) => {
+    setWorking(ref.id)
+    try {
+      const blob = await construirPdf(
+        {
+          dirigidoA: ref.dirigido_a,
+          motivo: ref.motivo,
+          sugerencia: ref.sugerencia,
+          proximoControl: ref.proximo_control,
+        },
+        new Date(ref.created_at).toLocaleDateString('es-CL', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        })
+      )
+
+      const path = `${patient.id}/${Date.now()}_derivacion.pdf`
+      await uploadDocumentPdf(path, blob)
+      await updateReferral(ref.id, { pdf_url: path })
+      // El archivo anterior ya no se usa: se borra recién ahora, para no
+      // dejar la derivación sin PDF si algo falla antes
+      if (ref.pdf_url) await deleteDocumentPdf(ref.pdf_url).catch(() => {})
+
+      showToast('Informe regenerado con el formato actual')
+      load()
+    } catch (err) {
+      console.error(err)
+      showToast('Error regenerando el informe', 'error')
+    } finally {
+      setWorking(null)
     }
   }
 
@@ -454,6 +507,14 @@ export default function ReferralsTab({
                     className="bg-salvia text-marfil px-4 py-1.5 rounded-full text-sm font-bold hover:opacity-90 transition disabled:opacity-50"
                   >
                     💬 WhatsApp
+                  </button>
+                  <button
+                    onClick={() => regenerar(ref)}
+                    disabled={working === ref.id}
+                    className="bg-white border border-arena text-tinta px-3 py-1.5 rounded-full text-sm font-bold hover:border-tinta-suave transition disabled:opacity-50"
+                    title="Vuelve a crear el PDF con el formato y la ficha clínica actuales"
+                  >
+                    🔄 Regenerar
                   </button>
                   <button
                     onClick={() => setDeleteTarget(ref)}

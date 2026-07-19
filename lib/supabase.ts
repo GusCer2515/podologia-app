@@ -524,6 +524,17 @@ export async function createReferral(payload: any) {
   if (error) throw error
 }
 
+// Borra solo el archivo del almacenamiento (sin tocar ningún registro)
+export async function deleteDocumentPdf(path: string) {
+  const { error } = await supabase.storage.from('documents').remove([path])
+  if (error) throw error
+}
+
+export async function updateReferral(id: string, payload: any) {
+  const { error } = await supabase.from('referrals').update(payload).eq('id', id)
+  if (error) throw error
+}
+
 export async function deleteReferral(id: string, pdfPath?: string) {
   if (pdfPath) await supabase.storage.from('documents').remove([pdfPath])
   const { error } = await supabase.from('referrals').delete().eq('id', id)

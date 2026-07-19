@@ -36,8 +36,10 @@ const s = StyleSheet.create({
   parrafo: { lineHeight: 1.35, textAlign: 'justify', marginBottom: 2 },
   item: { lineHeight: 1.35, marginLeft: 12, marginBottom: 1 },
   etiqueta: { fontFamily: 'Helvetica-Bold' },
-  firma: { marginTop: 16, lineHeight: 1.3 },
-  firmaImg: { width: 86, marginBottom: -5 },
+  firma: { marginTop: 16, lineHeight: 1.3, alignItems: 'center' },
+  despedida: { alignSelf: 'flex-start', marginBottom: 2 },
+  firmaTexto: { textAlign: 'center' },
+  firmaImg: { width: 86, alignSelf: 'center', marginBottom: -5 },
   // Encabezado breve que se repite desde la segunda hoja
   encabezadoCont: {
     position: 'absolute',
@@ -83,6 +85,9 @@ export interface ReferralData {
   motivo: string
   sugerencia?: string
   proximoControl?: string
+  // Fecha de emisión original (al regenerar un informe antiguo no debe
+  // cambiar por la fecha de hoy)
+  fechaEmision?: string
   // Datos clínicos (ya redactados por el panel)
   antecedentes: string[]
   evaluacionPie: string[]
@@ -117,11 +122,13 @@ export function ReferralDocument({
   origin: string
   info: ClinicInfo
 }) {
-  const hoy = new Date().toLocaleDateString('es-CL', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
+  const emitido =
+    d.fechaEmision ||
+    new Date().toLocaleDateString('es-CL', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
 
   return (
     <Document title="Informe de derivación" author={info.professional}>
@@ -141,7 +148,7 @@ export function ReferralDocument({
         <View style={s.cabecera}>
           <Text>
             <Text style={s.etiqueta}>Fecha de Emisión: </Text>
-            {hoy}
+            {emitido}
           </Text>
           <Text>
             <Text style={s.etiqueta}>De: </Text>
@@ -235,14 +242,14 @@ export function ReferralDocument({
           </Text>
         )}
 
-        {/* Firma: nunca se parte entre dos hojas */}
+        {/* Firma: centrada como en las recetas · nunca se parte entre hojas */}
         <View style={s.firma} wrap={false}>
-          <Text>Atentamente,</Text>
+          <Text style={s.despedida}>Atentamente,</Text>
           <Image src={`${origin}/pdf-assets/firma.png`} style={s.firmaImg} />
-          <Text style={s.etiqueta}>{info.professional}</Text>
-          <Text>Podóloga Clínica</Text>
-          <Text>Rut: {info.rut}</Text>
-          <Text>Contacto: {info.phone}</Text>
+          <Text style={[s.firmaTexto, s.etiqueta]}>{info.professional}</Text>
+          <Text style={s.firmaTexto}>Podóloga Clínica</Text>
+          <Text style={s.firmaTexto}>Rut: {info.rut}</Text>
+          <Text style={s.firmaTexto}>Contacto: {info.phone}</Text>
         </View>
 
         {/* Pie fijo: se repite igual en todas las hojas */}
