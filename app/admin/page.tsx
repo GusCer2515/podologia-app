@@ -41,6 +41,12 @@ const toMin = (hhmm: string) => {
 const toHHMM = (min: number) =>
   `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
 const overlaps = (a1: number, a2: number, b1: number, b2: number) => a1 < b2 && b1 < a2
+const dur = (m: number) => {
+  const h = Math.floor(m / 60)
+  const r = m % 60
+  if (h === 0) return `${r} min`
+  return r === 0 ? `${h} h` : `${h} h ${r} min`
+}
 
 const STATUS_STYLE: Record<string, string> = {
   scheduled: 'bg-white border-tinta text-tinta',
@@ -59,8 +65,14 @@ export default function AdminAgendaPage() {
   const [loading, setLoading] = useState(true)
   const [filtro, setFiltro] = useState<'todo' | 'podologia' | 'manicura'>('todo')
 
-  // Modal de agendar
-  const [bookSlot, setBookSlot] = useState<{ date: string; time: string; info: any } | null>(null)
+  // Modal de agendar: se abre sobre un RANGO libre y dentro se elige la hora
+  const [bookSlot, setBookSlot] = useState<{
+    date: string
+    rangeStart: number
+    rangeEnd: number
+    info: any
+  } | null>(null)
+  const [bookTime, setBookTime] = useState('')
   const [bookPatient, setBookPatient] = useState('')
   const [bookSearch, setBookSearch] = useState('')
   const [bookNotes, setBookNotes] = useState('')
@@ -117,38 +129,69 @@ export default function AdminAgendaPage() {
     }
   }
 
+  // Duración y preparación del servicio elegido en el modal
+  const servicioSel = nailServices.find((s) => s.id === bookServiceId)
+  const duracionSel = bookTipo === 'manicura' ? servicioSel?.duracion_minutes ?? 60 : 60
+  const prepSel = bookTipo === 'manicura' ? buffers.manicura : buffers.podologia
+
+  // Horas de inicio válidas dentro del rango elegido
+  const horasPosibles: string[] = []
+  if (bookSlot) {
+    for (let t = bookSlot.rangeStart; t + duracionSel <= bookSlot.rangeEnd; t += PASO_MIN) {
+      horasPosibles.push(toHHMM(t))
+    }
+  }
+
+  // Al cambiar el servicio, ajustar la hora elegida si ya no es válida
+  useEffect(() => {
+    if (!bookSlot) return
+    if (horasPosibles.length === 0) {
+      setBookTime('')
+    } else if (!horasPosibles.includes(bookTime)) {
+      setBookTime(horasPosibles[0])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookSlot, duracionSel])
+
+  const cerrarModal = () => {
+    setBookSlot(null)
+    setBookTime('')
+    setBookPatient('')
+    setBookSearch('')
+    setBookNotes('')
+    setBookTipo('podologia')
+    setBookServiceId('')
+  }
+
   const confirmBook = async () => {
     if (!bookSlot || !bookPatient) {
       showToast('Selecciona el paciente', 'error')
       return
     }
-    const servicio = nailServices.find((s) => s.id === bookServiceId)
-    const duration = bookTipo === 'manicura' ? servicio?.duracion_minutes ?? 60 : 60
     if (bookTipo === 'manicura' && !bookServiceId) {
       showToast('Selecciona el servicio de manicura', 'error')
       return
     }
+    if (!bookTime) {
+      showToast('Selecciona la hora de inicio', 'error')
+      return
+    }
 
-    // Validar que el servicio CABE (incluyendo el tiempo de preparación posterior)
     const info = bookSlot.info
-    const prep = bookTipo === 'manicura' ? buffers.manicura : buffers.podologia
-    const startMin = toMin(bookSlot.time)
-    const endMin = startMin + duration
-    const endConPrep = endMin + prep
-    // La atención completa debe caber dentro de un bloque de atención
-    const dentroDeBloque = info.bloques.some(
-      (b: any) => startMin >= b.start && endMin <= b.end
-    )
-    if (!dentroDeBloque) {
+    const startMin = toMin(bookTime)
+    const endMin = startMin + duracionSel
+    const endConPrep = endMin + prepSel
+
+    if (!info.bloques.some((b: any) => startMin >= b.start && endMin <= b.end)) {
       showToast(
-        `El servicio de ${duration} min no cabe en el bloque de atención (terminaría ${toHHMM(endMin)})`,
+        `El servicio de ${dur(duracionSel)} no cabe en el bloque (terminaría ${toHHMM(endMin)})`,
         'error'
       )
       return
     }
     if (info.busy.some((b: any) => overlaps(startMin, endConPrep, b.start, b.end))) {
       showToast(
-        `No cabe: termina ${toHHMM(endMin)} y con ${prep} min de preparación llega a ${toHHMM(endConPrep)}, chocando con la siguiente cita`,
+        `No cabe: termina ${toHHMM(endMin)} y con ${prepSel} min de preparación llega a ${toHHMM(endConPrep)}`,
         'error'
       )
       return
@@ -158,19 +201,19 @@ export default function AdminAgendaPage() {
     try {
       await adminCreateAppointment(
         bookPatient,
-        `${bookSlot.date}T${bookSlot.time}:00`,
+        `${bookSlot.date}T${bookTime}:00`,
         bookNotes || 'Agendada por administración',
         bookTipo === 'manicura'
-          ? { tipo: 'manicura', nail_service_id: bookServiceId, valor: servicio?.valor ?? null, duration_minutes: duration }
+          ? {
+              tipo: 'manicura',
+              nail_service_id: bookServiceId,
+              valor: servicioSel?.valor ?? null,
+              duration_minutes: duracionSel,
+            }
           : { tipo: 'podologia', duration_minutes: 60 }
       )
       showToast(bookTipo === 'manicura' ? 'Manicura agendada 💅' : 'Cita agendada')
-      setBookSlot(null)
-      setBookPatient('')
-      setBookSearch('')
-      setBookNotes('')
-      setBookTipo('podologia')
-      setBookServiceId('')
+      cerrarModal()
       loadWeek(weekStart)
     } catch (err: any) {
       console.error(err)
@@ -182,16 +225,14 @@ export default function AdminAgendaPage() {
 
   const blockedMap = new Map(blockouts.map((b: any) => [String(b.blocked_date), b.notes]))
 
-  // Construir cada día con su horario, almuerzo, citas y cupos libres
+  // ===== Construcción de cada día =====
   const days = Array.from({ length: 7 }, (_, i) => {
     const date = new Date(weekStart)
     date.setDate(date.getDate() + i)
     const iso = toLocalIso(date)
     const blocked = blockedMap.has(iso)
-    // Un día puede tener varios bloques de atención
     const bloques = bloquesDelDia(availability, date.getDay())
 
-    // Todas las citas del día (para mostrar), y las ACTIVAS (para ocupar)
     const dayAppts = appointments
       .filter((a) => String(a.appointment_date).substring(0, 10) === iso)
       .filter((a) => filtro === 'todo' || a.tipo === filtro || (!a.tipo && filtro === 'podologia'))
@@ -199,37 +240,40 @@ export default function AdminAgendaPage() {
       (a) => String(a.appointment_date).substring(0, 10) === iso && a.status !== 'cancelled'
     )
 
-    // Cada cita ocupa su duración + el tiempo de preparación posterior
-    const busy = activas.map((a) => {
-      const t = toMin(String(a.appointment_date).substring(11, 16))
-      return { start: t, end: t + (a.duration_minutes || 60) + bufferDe(a.tipo, buffers) }
-    })
+    // Cada cita ocupa su duración + preparación posterior
+    const busy = activas
+      .map((a) => {
+        const t = toMin(String(a.appointment_date).substring(11, 16))
+        return { start: t, end: t + (a.duration_minutes || 60) + bufferDe(a.tipo, buffers) }
+      })
+      .sort((a, b) => a.start - b.start)
+
     const info = { bloques, busy }
 
     const now = new Date()
     const nowMin = now.getHours() * 60 + now.getMinutes()
     const isToday = iso === todayIso
 
-    // Cupos libres + cuántos minutos seguidos hay disponibles desde cada uno
-    const freeSlots: { time: string; gap: number }[] = []
+    // RANGOS libres continuos dentro de cada bloque (en vez de mil casillas)
+    const freeRanges: { start: number; end: number }[] = []
     if (bloques.length > 0 && !blocked) {
       for (const bloque of bloques) {
-        for (let t = bloque.start; t + PASO_MIN <= bloque.end; t += PASO_MIN) {
-          const cellEnd = t + PASO_MIN
-          if (busy.some((b) => overlaps(t, cellEnd, b.start, b.end))) continue
-          if (isToday && t <= nowMin) continue
-
-          // Espacio libre hasta la próxima cita o el fin de ESTE bloque
-          let limite = bloque.end
-          for (const b of busy) if (b.start >= t) limite = Math.min(limite, b.start)
-
-          freeSlots.push({ time: toHHMM(t), gap: limite - t })
+        let cursor = bloque.start
+        if (isToday) cursor = Math.max(cursor, Math.ceil(nowMin / PASO_MIN) * PASO_MIN)
+        for (const b of busy) {
+          if (b.end <= cursor) continue
+          if (b.start >= bloque.end) break
+          if (b.start > cursor) {
+            const fin = Math.min(b.start, bloque.end)
+            if (fin - cursor >= PASO_MIN) freeRanges.push({ start: cursor, end: fin })
+          }
+          cursor = Math.max(cursor, b.end)
         }
+        if (bloque.end - cursor >= PASO_MIN) freeRanges.push({ start: cursor, end: bloque.end })
       }
     }
 
-    // Minutos libres del día (para KPI/alerta de capacidad)
-    const freeMin = freeSlots.length * PASO_MIN
+    const freeMin = freeRanges.reduce((s, r) => s + (r.end - r.start), 0)
 
     return {
       name: DAY_NAMES[i],
@@ -242,7 +286,7 @@ export default function AdminAgendaPage() {
       info,
       dayAppts,
       activas,
-      freeSlots,
+      freeRanges,
       freeMin,
     }
   })
@@ -265,7 +309,7 @@ export default function AdminAgendaPage() {
 
   return (
     <div>
-      {/* Header + filtro */}
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <h1 className="font-display text-3xl text-tinta font-medium">
           Agenda <span className="italic">semanal</span>
@@ -311,7 +355,7 @@ export default function AdminAgendaPage() {
         <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
           <p className="text-sm text-gray-500">🕐 Libre hoy</p>
           <p className="text-3xl font-bold text-salvia">
-            {todayFreeMin == null ? '—' : `${Math.floor(todayFreeMin / 60)}h${todayFreeMin % 60 ? ' ' + (todayFreeMin % 60) + 'm' : ''}`}
+            {todayFreeMin == null ? '—' : dur(todayFreeMin)}
           </p>
         </div>
         <div className="bg-marfil p-4 rounded-2xl border border-arena shadow-sm">
@@ -321,8 +365,8 @@ export default function AdminAgendaPage() {
       </div>
 
       <p className="text-sm text-gray-500 mb-2">
-        Semana del {fmtShort(days[0].date)} al {fmtShort(days[6].date)} · Los cupos punteados están
-        libres: haz click para agendar (podología 1h o manicura según servicio)
+        Semana del {fmtShort(days[0].date)} al {fmtShort(days[6].date)} · Los tramos verdes están
+        libres: haz click para agendar dentro de ese rango
       </p>
 
       {loading ? (
@@ -333,6 +377,19 @@ export default function AdminAgendaPage() {
             const isPast = day.iso < todayIso
             const isDimmed = isPast || (day.bloques.length === 0 && !day.blocked)
             const pendientes = day.dayAppts.filter((a) => a.status === 'scheduled').length
+
+            // Línea de tiempo: citas activas + rangos libres, en orden
+            const filas = [
+              ...day.dayAppts
+                .filter((a) => a.status !== 'cancelled')
+                .map((a) => ({
+                  min: toMin(String(a.appointment_date).substring(11, 16)),
+                  kind: 'appt' as const,
+                  apt: a,
+                })),
+              ...day.freeRanges.map((r) => ({ min: r.start, kind: 'free' as const, range: r })),
+            ].sort((a, b) => a.min - b.min)
+
             return (
               <div
                 key={day.iso}
@@ -342,15 +399,16 @@ export default function AdminAgendaPage() {
               >
                 <div
                   className={`sticky top-16 z-10 px-3 py-2 border-b border-arena/60 text-center rounded-t-2xl shadow-sm ${
-                    day.blocked
-                      ? 'bg-rosa text-marfil'
-                      : day.isToday
-                      ? 'bg-tinta text-marfil'
-                      : 'bg-arena text-tinta'
+                    day.blocked ? 'bg-rosa text-marfil' : day.isToday ? 'bg-tinta text-marfil' : 'bg-arena text-tinta'
                   }`}
                 >
                   <p className={`text-xs font-semibold uppercase ${isPast ? 'line-through' : ''}`}>{day.name}</p>
                   <p className={`text-sm font-bold ${isPast ? 'line-through' : ''}`}>{fmtShort(day.date)}</p>
+                  {day.bloques.length > 0 && !day.blocked && (
+                    <p className="text-[10px] opacity-80 mt-0.5">
+                      {day.bloques.map((b) => `${toHHMM(b.start)}–${toHHMM(b.end)}`).join(' · ')}
+                    </p>
+                  )}
                   {pendientes > 0 && !day.blocked && !isPast && (
                     <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${day.isToday ? 'bg-marfil/25 text-marfil' : 'bg-tinta/10 text-tinta'}`}>
                       {pendientes} cita{pendientes > 1 ? 's' : ''}
@@ -373,83 +431,73 @@ export default function AdminAgendaPage() {
                     <p className="text-xs text-gray-400 text-center py-3">{isPast ? 'Día pasado' : 'Sin atención'}</p>
                   ) : (
                     <>
-                      {/* Línea de tiempo: citas ACTIVAS + cupos libres, en orden */}
-                      {[
-                        ...day.dayAppts
-                          .filter((a) => a.status !== 'cancelled')
-                          .map((a) => ({ min: toMin(String(a.appointment_date).substring(11, 16)), kind: 'appt' as const, apt: a })),
-                        ...day.freeSlots.map((s) => ({
-                          min: toMin(s.time),
-                          kind: 'free' as const,
-                          time: s.time,
-                          gap: s.gap,
-                        })),
-                      ]
-                        .sort((a, b) => a.min - b.min)
-                        .map((row) => {
-                          if (row.kind === 'free') {
-                            const corto = row.gap < 60
-                            return (
-                              <button
-                                key={`free-${row.time}`}
-                                onClick={() => setBookSlot({ date: day.iso, time: row.time, info: day.info })}
-                                className={`w-full border border-dashed rounded-lg p-1.5 text-xs transition text-left ${
-                                  corto
-                                    ? 'border-yellow-300 text-yellow-700 hover:bg-yellow-50'
-                                    : 'border-arena text-gray-400 hover:border-tinta-suave hover:text-tinta hover:bg-rosa-palo/20'
-                                }`}
-                                title={
-                                  corto
-                                    ? `Solo caben ${row.gap} min (no alcanza una podología de 1 h)`
-                                    : 'Agendar en este cupo'
-                                }
-                              >
-                                + {row.time} disponible
-                                {corto && <span className="font-bold"> · solo {row.gap} min</span>}
-                              </button>
-                            )
-                          }
-                          const apt = row.apt
-                          const t = String(apt.appointment_date).substring(11, 16)
-                          const endT = toHHMM(toMin(t) + (apt.duration_minutes || 60))
-                          const isMani = apt.tipo === 'manicura'
+                      {filas.map((row) => {
+                        if (row.kind === 'free') {
+                          const largo = row.range.end - row.range.start
                           return (
-                            <div
-                              key={apt.id}
-                              className={`border-l-4 rounded-xl p-2 text-xs shadow-sm hover:shadow-md transition ${
-                                day.blocked
-                                  ? 'bg-rosa-palo/40 border-rosa text-tinta'
-                                  : isMani && apt.status === 'scheduled'
-                                  ? 'bg-[#f4eefa] border-[#a37cc4] text-tinta'
-                                  : STATUS_STYLE[apt.status] || STATUS_STYLE.scheduled
-                              }`}
+                            <button
+                              key={`free-${row.range.start}`}
+                              onClick={() =>
+                                setBookSlot({
+                                  date: day.iso,
+                                  rangeStart: row.range.start,
+                                  rangeEnd: row.range.end,
+                                  info: day.info,
+                                })
+                              }
+                              className="w-full border border-dashed border-salvia/50 bg-salvia/5 rounded-lg px-2 py-2 text-xs text-left hover:bg-salvia/15 hover:border-salvia transition"
+                              title="Agendar dentro de este tramo"
                             >
-                              <div className="flex items-center justify-between">
-                                <p className="font-bold">🕐 {t}–{endT}</p>
-                                <span>{isMani ? '💅' : ''}{apt.status === 'completed' ? ' ✅' : ''}</span>
-                              </div>
-                              {isMani && apt.nail_services?.nombre && (
-                                <p className="text-[10px] font-bold text-[#7c5a99]">{apt.nail_services.nombre}</p>
-                              )}
-                              <Link href={`/admin/patients/${apt.patients?.id ?? ''}`} className="flex items-center gap-1.5 mt-1 hover:underline" title={apt.patients?.name}>
-                                <span className={`w-5 h-5 rounded-full ${colorFor(apt.patients?.name)} text-marfil flex items-center justify-center text-[8px] font-bold shrink-0`}>{initials(apt.patients?.name)}</span>
-                                <span className="font-semibold truncate">{apt.patients?.name || 'Paciente'}</span>
-                              </Link>
-                              {day.blocked && apt.status === 'scheduled' && (
-                                <Link href={`/admin/patients/${apt.patients?.id ?? ''}`} className="block mt-1 text-center bg-rosa text-marfil rounded px-1 py-0.5 font-bold hover:opacity-90">🔄 Reagendar</Link>
-                              )}
-                              {!day.blocked && apt.status === 'scheduled' && (
-                                <div className="flex gap-1 mt-2">
-                                  <button onClick={() => setStatus(apt.id, 'completed')} className="flex-1 bg-salvia text-marfil rounded-full px-1 py-0.5 font-bold hover:opacity-90 transition" title="Completada">✓</button>
-                                  <button onClick={() => setCancelTarget(apt)} className="flex-1 bg-rosa text-marfil rounded-full px-1 py-0.5 font-bold hover:opacity-90 transition" title="Cancelar">✕</button>
-                                </div>
-                              )}
-                            </div>
+                              <span className="block font-bold text-salvia">
+                                {toHHMM(row.range.start)} – {toHHMM(row.range.end)}
+                              </span>
+                              <span className="block text-gray-500">{dur(largo)} libre · + agendar</span>
+                            </button>
                           )
-                        })}
+                        }
+                        const apt = row.apt
+                        const t = String(apt.appointment_date).substring(11, 16)
+                        const endT = toHHMM(toMin(t) + (apt.duration_minutes || 60))
+                        const isMani = apt.tipo === 'manicura'
+                        return (
+                          <div
+                            key={apt.id}
+                            className={`border-l-4 rounded-xl p-2 text-xs shadow-sm hover:shadow-md transition ${
+                              day.blocked
+                                ? 'bg-rosa-palo/40 border-rosa text-tinta'
+                                : isMani && apt.status === 'scheduled'
+                                ? 'bg-[#f4eefa] border-[#a37cc4] text-tinta'
+                                : STATUS_STYLE[apt.status] || STATUS_STYLE.scheduled
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <p className="font-bold">🕐 {t}–{endT}</p>
+                              <span>{isMani ? '💅' : ''}{apt.status === 'completed' ? ' ✅' : ''}</span>
+                            </div>
+                            {isMani && apt.nail_services?.nombre && (
+                              <p className="text-[10px] font-bold text-[#7c5a99]">{apt.nail_services.nombre}</p>
+                            )}
+                            <Link href={`/admin/patients/${apt.patients?.id ?? ''}`} className="flex items-center gap-1.5 mt-1 hover:underline" title={apt.patients?.name}>
+                              <span className={`w-5 h-5 rounded-full ${colorFor(apt.patients?.name)} text-marfil flex items-center justify-center text-[8px] font-bold shrink-0`}>{initials(apt.patients?.name)}</span>
+                              <span className="font-semibold truncate">{apt.patients?.name || 'Paciente'}</span>
+                            </Link>
+                            {day.blocked && apt.status === 'scheduled' && (
+                              <Link href={`/admin/patients/${apt.patients?.id ?? ''}`} className="block mt-1 text-center bg-rosa text-marfil rounded px-1 py-0.5 font-bold hover:opacity-90">🔄 Reagendar</Link>
+                            )}
+                            {!day.blocked && apt.status === 'scheduled' && (
+                              <div className="flex gap-1 mt-2">
+                                <button onClick={() => setStatus(apt.id, 'completed')} className="flex-1 bg-salvia text-marfil rounded-full px-1 py-0.5 font-bold hover:opacity-90 transition" title="Completada">✓</button>
+                                <button onClick={() => setCancelTarget(apt)} className="flex-1 bg-rosa text-marfil rounded-full px-1 py-0.5 font-bold hover:opacity-90 transition" title="Cancelar">✕</button>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
 
-                      {day.bloques.length > 0 && day.freeSlots.length === 0 && day.dayAppts.filter((a) => a.status !== 'cancelled').length === 0 && !day.blocked && (
-                        <p className="text-xs text-gray-400 text-center py-3">{isPast ? 'Día pasado' : day.isToday ? 'Sin más cupos hoy' : 'Sin cupos'}</p>
+                      {filas.length === 0 && !day.blocked && (
+                        <p className="text-xs text-gray-400 text-center py-3">
+                          {isPast ? 'Día pasado' : day.isToday ? 'Sin más cupos hoy' : 'Día completo'}
+                        </p>
                       )}
                     </>
                   )}
@@ -467,7 +515,7 @@ export default function AdminAgendaPage() {
             <div className="w-16 h-16 mx-auto rounded-full bg-rosa-palo flex items-center justify-center text-3xl">🕐</div>
             <h2 className="font-display text-2xl text-tinta font-medium mt-4">¿Cancelar la cita de <span className="italic">{cancelTarget.patients?.name}</span>?</h2>
             <p className="mt-3 text-sm text-foreground/75">
-              {new Date(cancelTarget.appointment_date).toLocaleDateString('es-CL')} a las {String(cancelTarget.appointment_date).substring(11, 16)} hrs — la hora quedará liberada para otro paciente.
+              {new Date(cancelTarget.appointment_date).toLocaleDateString('es-CL')} a las {String(cancelTarget.appointment_date).substring(11, 16)} hrs — la hora quedará liberada.
             </p>
             <button onClick={() => { setStatus(cancelTarget.id, 'cancelled'); setCancelTarget(null) }} className="mt-6 w-full bg-rosa text-marfil py-3 rounded-full font-bold hover:opacity-90 transition">Sí, cancelar cita</button>
             <button onClick={() => setCancelTarget(null)} className="mt-3 w-full py-3 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition">Volver</button>
@@ -475,13 +523,19 @@ export default function AdminAgendaPage() {
         </div>
       )}
 
-      {/* Modal agendar */}
+      {/* Modal agendar dentro del tramo libre */}
       {bookSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4">
           <div className="bg-marfil rounded-3xl shadow-2xl border border-arena max-w-md w-full p-7 animate-fade-up max-h-[90vh] overflow-y-auto">
             <h2 className="font-display text-2xl text-tinta font-medium">
-              Agendar el <span className="italic">{new Date(bookSlot.date + 'T00:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}</span> a las {bookSlot.time}
+              Agendar el{' '}
+              <span className="italic">
+                {new Date(bookSlot.date + 'T00:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </span>
             </h2>
+            <p className="text-sm text-gray-500">
+              Tramo libre: <strong className="text-salvia">{toHHMM(bookSlot.rangeStart)} – {toHHMM(bookSlot.rangeEnd)}</strong>
+            </p>
 
             <div className="flex gap-2 mt-4">
               <button onClick={() => setBookTipo('podologia')} className={`flex-1 py-2 rounded-full text-sm font-bold border transition ${bookTipo === 'podologia' ? 'bg-tinta text-marfil border-tinta' : 'bg-white text-tinta-suave border-arena hover:border-tinta-suave'}`}>🦶 Podología (1h)</button>
@@ -492,16 +546,45 @@ export default function AdminAgendaPage() {
               <select value={bookServiceId} onChange={(e) => setBookServiceId(e.target.value)} className="w-full mt-3 px-4 py-2 border border-[#a37cc4]/40 rounded-xl bg-[#f4eefa] text-sm font-semibold text-tinta focus:outline-none focus:ring-2 focus:ring-[#a37cc4]">
                 <option value="">— Elige el servicio —</option>
                 {nailServices.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nombre} — ${Number(s.valor).toLocaleString('es-CL')} ({s.duracion_minutes} min)</option>
+                  <option key={s.id} value={s.id}>
+                    {s.nombre} — ${Number(s.valor).toLocaleString('es-CL')} ({dur(s.duracion_minutes)})
+                  </option>
                 ))}
               </select>
             )}
 
+            {/* Hora de inicio dentro del tramo */}
+            <p className="text-xs font-bold uppercase tracking-wide text-tinta-suave mt-4 mb-2">
+              Hora de inicio ({dur(duracionSel)} + {prepSel} min de preparación)
+            </p>
+            {horasPosibles.length === 0 ? (
+              <p className="text-sm text-orange-600 bg-orange-50 p-3 rounded-xl">
+                Este servicio de {dur(duracionSel)} no cabe en este tramo. Elige otro servicio o
+                tramo.
+              </p>
+            ) : (
+              <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto">
+                {horasPosibles.map((h) => (
+                  <button
+                    key={h}
+                    onClick={() => setBookTime(h)}
+                    className={`px-2 py-1.5 rounded-lg text-sm font-semibold border transition ${
+                      bookTime === h
+                        ? 'bg-tinta text-marfil border-tinta'
+                        : 'bg-white text-foreground border-arena hover:border-tinta-suave'
+                    }`}
+                  >
+                    {h}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <input type="text" value={bookSearch} onChange={(e) => setBookSearch(e.target.value)} placeholder="🔍 Buscar paciente por nombre, RUT o teléfono..." className="w-full mt-4 px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
 
-            <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
+            <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
               {filteredPatients.length === 0 ? (
-                <p className="text-sm text-gray-400 p-3">No se encontró el paciente. Créalo primero en 👥 Pacientes.</p>
+                <p className="text-sm text-gray-400 p-3">No se encontró el paciente. Créalo en 👥 Pacientes.</p>
               ) : (
                 filteredPatients.map((p) => (
                   <button key={p.id} onClick={() => setBookPatient(p.id)} className={`w-full text-left px-3 py-2 rounded-xl text-sm border transition ${bookPatient === p.id ? 'bg-tinta text-marfil border-tinta' : 'bg-white border-arena hover:border-tinta-suave'}`}>
@@ -514,8 +597,10 @@ export default function AdminAgendaPage() {
 
             <input type="text" value={bookNotes} onChange={(e) => setBookNotes(e.target.value)} placeholder="Notas (opcional)" className="w-full mt-3 px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
 
-            <button onClick={confirmBook} disabled={savingBook || !bookPatient} className="mt-4 w-full bg-tinta text-marfil py-3 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50">{savingBook ? 'Agendando...' : '✔ Confirmar cita'}</button>
-            <button onClick={() => { setBookSlot(null); setBookPatient(''); setBookSearch(''); setBookTipo('podologia'); setBookServiceId('') }} className="mt-2 w-full py-2.5 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition">Cancelar</button>
+            <button onClick={confirmBook} disabled={savingBook || !bookPatient || !bookTime} className="mt-4 w-full bg-tinta text-marfil py-3 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50">
+              {savingBook ? 'Agendando...' : bookTime ? `✔ Confirmar a las ${bookTime}` : 'Selecciona la hora'}
+            </button>
+            <button onClick={cerrarModal} className="mt-2 w-full py-2.5 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition">Cancelar</button>
           </div>
         </div>
       )}
