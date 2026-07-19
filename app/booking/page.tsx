@@ -261,7 +261,24 @@ export default function BookingPage() {
                   {loadingSlots ? (
                     <p className="text-gray-500 text-sm">Buscando horas disponibles...</p>
                   ) : dayMessage ? (
-                    <p className="text-sm text-orange-600 bg-orange-50 p-3 rounded-xl">{dayMessage}</p>
+                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+                      <p className="text-sm text-orange-700">{dayMessage}</p>
+                      <a
+                        href={`https://wa.me/${clinic.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                          `Hola 👋 Quiero consultar por un posible sobrecupo para el ${
+                            formData.date ? fmtFecha(formData.date) : 'día que tengo en mente'
+                          }. ¿Tendrían alguna hora disponible?`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 block w-full text-center bg-salvia text-marfil py-2.5 rounded-full text-sm font-bold hover:opacity-90 transition"
+                      >
+                        💬 Consultar por un sobrecupo
+                      </a>
+                      <p className="text-[11px] text-orange-700/70 mt-2 text-center">
+                        Escríbenos por WhatsApp y vemos si podemos hacerte un espacio.
+                      </p>
+                    </div>
                   ) : (
                     <div className="grid grid-cols-4 gap-2">
                       {slots.map((time) => (

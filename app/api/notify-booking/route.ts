@@ -55,7 +55,8 @@ function emailBase(info: any, contenido: string) {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { appointmentId, date, time } = body
+    // soloPaciente: cuando agenda la propia clínica, no se envía el aviso interno
+    const { appointmentId, date, time, soloPaciente } = body
     let { name, email, phone } = body
 
     if (!appointmentId || !date || !time) {
@@ -115,13 +116,28 @@ export async function POST(req: Request) {
           <p style="margin:0;font-size:16px">📅 <strong>${fecha}</strong></p>
           <p style="margin:6px 0 0;font-size:16px">🕐 <strong>${time} hrs</strong></p>
         </div>
+        ${
+          contact.es_nuevo
+            ? `<div style="background:#f1e9de;border-radius:14px;padding:16px 20px;margin:18px 0">
+                 <p style="margin:0;font-size:15px">📍 <strong>¿Dónde nos ubicamos?</strong></p>
+                 <p style="margin:6px 0 0;font-size:14px;color:#555">
+                   Como es tu primera visita, te enviaremos la <strong>dirección por WhatsApp</strong>
+                   al ${info.phone} junto con las indicaciones para llegar.
+                 </p>
+               </div>`
+            : `<p style="font-size:15px;color:#555">📍 Te esperamos <strong>donde siempre</strong>. 😊</p>`
+        }
         <p style="font-size:14px;color:#666">Si necesitas cambiar o cancelar tu hora, contáctanos por WhatsApp al ${info.phone}.</p>
         <p style="font-size:16px">¡Te esperamos! 🌸</p>
       `),
       info.brand
     )
 
-    // 2. Aviso a la clínica (correo de avisos si está configurado, si no el del negocio)
+    // 2. Aviso a la clínica (se omite si la propia clínica agendó la hora)
+    if (soloPaciente) {
+      return NextResponse.json({ ok: true, soloPaciente: true })
+    }
+
     await sendEmail(
       (info as any).notifyEmail?.trim() || info.email,
       `📅 Nueva reserva: ${name} — ${date} ${time}`,

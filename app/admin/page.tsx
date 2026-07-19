@@ -237,7 +237,7 @@ export default function AdminAgendaPage() {
 
     setSavingBook(true)
     try {
-      await adminCreateAppointment(
+      const nuevoId = await adminCreateAppointment(
         bookPatient,
         `${bookSlot.date}T${bookTime}:00`,
         bookNotes || 'Agendada por administración',
@@ -250,6 +250,22 @@ export default function AdminAgendaPage() {
             }
           : { tipo: 'podologia', duration_minutes: 60 }
       )
+
+      // Correo de confirmación al paciente (no en sobrecupos: son casos
+      // acordados aparte, y no se envía el aviso interno a la clínica)
+      if (nuevoId && !chocaPrep) {
+        fetch('/api/notify-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appointmentId: nuevoId,
+            date: bookSlot.date,
+            time: bookTime,
+            soloPaciente: true,
+          }),
+        }).catch(() => {})
+      }
+
       showToast(bookTipo === 'manicura' ? 'Manicura agendada 💅' : 'Cita agendada')
       cerrarModal()
       loadWeek(weekStart)

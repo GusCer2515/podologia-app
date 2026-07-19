@@ -557,10 +557,13 @@ export async function adminCreateAppointment(
   notes?: string,
   extra?: { tipo?: string; nail_service_id?: string | null; valor?: number | null; duration_minutes?: number }
 ) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('appointments')
     .insert([{ patient_id: patientId, appointment_date: datetime, notes: notes || null, ...extra }])
+    .select('id')
+    .single()
   if (error) throw error
+  return data?.id as string | undefined
 }
 
 // Citas recientes creadas desde el sitio web (para el centro de notificaciones)
