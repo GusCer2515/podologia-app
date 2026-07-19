@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { bookAppointment, findPatientByRut } from '@/lib/supabase'
 import { getPublicAvailableSlots } from '@/lib/slots'
 import { CLINIC, getClinicInfo, type ClinicInfo } from '@/lib/clinicConfig'
+import { waLinkClinica } from '@/lib/phone'
 
 type ModalState =
   | { type: 'success'; date: string; time: string; name: string }
@@ -168,7 +169,7 @@ export default function BookingPage() {
     const msg =
       `Hola 👋 Soy ${m.name}.\n` +
       `Confirmo mi hora agendada en ${clinic.brand} para el ${fmtFecha(m.date)} a las ${m.time} hrs. ✅`
-    return `https://wa.me/${clinic.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`
+    return waLinkClinica(clinic.phone, msg)
   }
 
   const inputClass =
@@ -277,11 +278,12 @@ export default function BookingPage() {
                     <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
                       <p className="text-sm text-orange-700">{dayMessage}</p>
                       <a
-                        href={`https://wa.me/${clinic.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                        href={waLinkClinica(
+                          clinic.phone,
                           `Hola 👋 Quiero consultar por un posible sobrecupo para el ${
                             formData.date ? fmtFecha(formData.date) : 'día que tengo en mente'
                           }. ¿Tendrían alguna hora disponible?`
-                        )}`}
+                        )}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mt-3 block w-full text-center bg-salvia text-marfil py-2.5 rounded-full text-sm font-bold hover:opacity-90 transition"

@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { getPublicAvailableSlots, todayLocalStr } from '@/lib/slots'
 import { getFreedSlots } from '@/lib/supabase'
 import { CLINIC, getClinicInfo, type ClinicInfo } from '@/lib/clinicConfig'
+import { waLinkClinica } from '@/lib/phone'
 
 // Hoy + las próximas 48 horas
 const DIAS = 3
@@ -87,12 +88,13 @@ export default function HorasLiberadas() {
   if (cargando || dias.length === 0) return null
 
   const hayLiberadas = dias.some((d) => d.liberadas.length > 0)
-  const waMsg = encodeURIComponent(
+  // Siempre al WhatsApp de la clínica, nunca al del visitante
+  const waUrl = waLinkClinica(
+    clinic.phone,
     hayLiberadas
       ? 'Hola 👋 Vi en la página que se liberaron horas. ¿Sigue disponible alguna?'
       : 'Hola 👋 Vi en la página que hay horas disponibles. ¿Puedo tomar una?'
   )
-  const waPhone = String(clinic.phone ?? '').replace(/\D/g, '')
 
   return (
     <section
@@ -175,16 +177,14 @@ export default function HorasLiberadas() {
           >
             Reservar mi hora
           </Link>
-          {waPhone && (
-            <a
-              href={`https://wa.me/${waPhone}?text=${waMsg}`}
+          <a
+              href={waUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="bg-marfil text-tinta border-2 border-tinta/15 px-8 py-3.5 rounded-full font-bold hover:border-tinta/40 transition"
             >
               💬 Consultar por WhatsApp
             </a>
-          )}
         </div>
 
         <p className="text-xs text-foreground/50 mt-6">

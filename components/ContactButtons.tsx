@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { waClinica } from '@/lib/phone'
 import { CLINIC, getClinicInfo, type ClinicInfo } from '@/lib/clinicConfig'
 
 // Botones de contacto del sitio público — leen los datos
@@ -15,7 +16,7 @@ export default function ContactButtons() {
   return (
     <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm font-semibold">
       <a
-        href={`https://wa.me/${info.phone.replace(/\D/g, '')}`}
+        href={`https://wa.me/${waClinica(info.phone)}`}
         target="_blank"
         rel="noopener noreferrer"
         className="bg-marfil border border-arena rounded-full px-6 py-3 text-tinta hover:shadow-md transition"

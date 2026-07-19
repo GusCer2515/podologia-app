@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { waPhone, esWaValido } from '@/lib/phone'
 import {
   getAllAvailability,
   saveDayBlocks,
@@ -754,6 +755,12 @@ function ContactosSection() {
       showToast('Teléfono y correo son obligatorios', 'error')
       return
     }
+    // Sin el +56 completo, los enlaces de WhatsApp del sitio abren un chat
+    // equivocado en vez del de la clínica
+    if (!esWaValido(info.phone)) {
+      showToast('El teléfono debe ser un celular chileno, ej: +56944187670', 'error')
+      return
+    }
     setSaving(true)
     try {
       const { professional, rut, instagram, phone, email } = info
@@ -763,7 +770,7 @@ function ContactosSection() {
           professional: professional.trim(),
           rut: rut.trim(),
           instagram: instagram.trim().startsWith('@') ? instagram.trim() : `@${instagram.trim()}`,
-          phone: phone.trim(),
+          phone: '+' + waPhone(phone),
           email: email.trim().toLowerCase(),
           notifyEmail: ((info as any).notifyEmail || '').trim().toLowerCase(),
         })
@@ -805,6 +812,11 @@ function ContactosSection() {
             <label className="text-xs font-semibold text-gray-600">
               Teléfono / WhatsApp (con +56)
               <input value={info.phone} onChange={set('phone')} className={`mt-1 ${inputClass}`} />
+              <span className={`block mt-1 font-normal ${esWaValido(info.phone) ? 'text-gray-400' : 'text-rosa'}`}>
+                {esWaValido(info.phone)
+                  ? `Los botones de WhatsApp del sitio abrirán wa.me/${waPhone(info.phone)}`
+                  : 'Debe incluir el +56, si no los botones de WhatsApp abrirán un chat equivocado'}
+              </span>
             </label>
             <label className="text-xs font-semibold text-gray-600">
               Correo del negocio (público)
