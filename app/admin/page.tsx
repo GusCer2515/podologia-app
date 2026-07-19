@@ -11,7 +11,14 @@ import {
   adminCreateAppointment,
   getNailServices,
 } from '@/lib/supabase'
-import { todayLocalStr, getBuffers, bufferDe, PASO_MIN, type Buffers } from '@/lib/slots'
+import {
+  todayLocalStr,
+  getBuffers,
+  bufferDe,
+  bloquesDelDia,
+  PASO_MIN,
+  type Buffers,
+} from '@/lib/slots'
 import { initials, colorFor } from '@/lib/avatar'
 import { showToast } from '@/components/toast'
 
@@ -128,12 +135,15 @@ export default function AdminAgendaPage() {
     const startMin = toMin(bookSlot.time)
     const endMin = startMin + duration
     const endConPrep = endMin + prep
-    if (endMin > info.end) {
-      showToast(`El servicio de ${duration} min no cabe: supera el horario de cierre`, 'error')
-      return
-    }
-    if (info.lunchStart != null && overlaps(startMin, endMin, info.lunchStart, info.lunchEnd)) {
-      showToast(`El servicio de ${duration} min choca con el horario de almuerzo`, 'error')
+    // La atención completa debe caber dentro de un bloque de atención
+    const dentroDeBloque = info.bloques.some(
+      (b: any) => startMin >= b.start && endMin <= b.end
+    )
+    if (!dentroDeBloque) {
+      showToast(
+        `El servicio de ${duration} min no cabe en el bloque de atención (terminaría ${toHHMM(endMin)})`,
+        'error'
+      )
       return
     }
     if (info.busy.some((b: any) => overlaps(startMin, endConPrep, b.start, b.end))) {
@@ -178,7 +188,8 @@ export default function AdminAgendaPage() {
     date.setDate(date.getDate() + i)
     const iso = toLocalIso(date)
     const blocked = blockedMap.has(iso)
-    const config = availability.find((a: any) => a.day_of_week === date.getDay())
+    // Un día puede tener varios bloques de atención
+    const bloques = bloquesDelDia(availability, date.getDay())
 
     // Todas las citas del día (para mostrar), y las ACTIVAS (para ocupar)
     const dayAppts = appointments
@@ -188,36 +199,32 @@ export default function AdminAgendaPage() {
       (a) => String(a.appointment_date).substring(0, 10) === iso && a.status !== 'cancelled'
     )
 
-    const start = config ? toMin(String(config.start_time).substring(0, 5)) : 0
-    const end = config ? toMin(String(config.end_time).substring(0, 5)) : 0
-    const lunchStart = config?.lunch_start ? toMin(String(config.lunch_start).substring(0, 5)) : null
-    const lunchEnd = config?.lunch_end ? toMin(String(config.lunch_end).substring(0, 5)) : null
     // Cada cita ocupa su duración + el tiempo de preparación posterior
     const busy = activas.map((a) => {
       const t = toMin(String(a.appointment_date).substring(11, 16))
       return { start: t, end: t + (a.duration_minutes || 60) + bufferDe(a.tipo, buffers) }
     })
-    const info = { start, end, lunchStart, lunchEnd, busy }
+    const info = { bloques, busy }
 
-    // Grilla de cupos libres (bloques de 30 min genuinamente libres)
     const now = new Date()
     const nowMin = now.getHours() * 60 + now.getMinutes()
     const isToday = iso === todayIso
+
     // Cupos libres + cuántos minutos seguidos hay disponibles desde cada uno
     const freeSlots: { time: string; gap: number }[] = []
-    if (config && !blocked) {
-      for (let t = start; t + PASO_MIN <= end; t += PASO_MIN) {
-        const cellEnd = t + PASO_MIN
-        if (lunchStart != null && overlaps(t, cellEnd, lunchStart, lunchEnd!)) continue
-        if (busy.some((b) => overlaps(t, cellEnd, b.start, b.end))) continue
-        if (isToday && t <= nowMin) continue
+    if (bloques.length > 0 && !blocked) {
+      for (const bloque of bloques) {
+        for (let t = bloque.start; t + PASO_MIN <= bloque.end; t += PASO_MIN) {
+          const cellEnd = t + PASO_MIN
+          if (busy.some((b) => overlaps(t, cellEnd, b.start, b.end))) continue
+          if (isToday && t <= nowMin) continue
 
-        // Hasta dónde llega el espacio libre (próxima cita, almuerzo o cierre)
-        let limite = end
-        if (lunchStart != null && lunchStart >= t) limite = Math.min(limite, lunchStart)
-        for (const b of busy) if (b.start >= t) limite = Math.min(limite, b.start)
+          // Espacio libre hasta la próxima cita o el fin de ESTE bloque
+          let limite = bloque.end
+          for (const b of busy) if (b.start >= t) limite = Math.min(limite, b.start)
 
-        freeSlots.push({ time: toHHMM(t), gap: limite - t })
+          freeSlots.push({ time: toHHMM(t), gap: limite - t })
+        }
       }
     }
 
@@ -231,9 +238,7 @@ export default function AdminAgendaPage() {
       isToday,
       blocked,
       blockNote: blockedMap.get(iso),
-      config,
-      lunchStart,
-      lunchEnd,
+      bloques,
       info,
       dayAppts,
       activas,
@@ -326,7 +331,7 @@ export default function AdminAgendaPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3">
           {days.map((day) => {
             const isPast = day.iso < todayIso
-            const isDimmed = isPast || (!day.config && !day.blocked)
+            const isDimmed = isPast || (day.bloques.length === 0 && !day.blocked)
             const pendientes = day.dayAppts.filter((a) => a.status === 'scheduled').length
             return (
               <div
@@ -364,7 +369,7 @@ export default function AdminAgendaPage() {
                     </div>
                   )}
 
-                  {!day.config && !day.blocked ? (
+                  {day.bloques.length === 0 && !day.blocked ? (
                     <p className="text-xs text-gray-400 text-center py-3">{isPast ? 'Día pasado' : 'Sin atención'}</p>
                   ) : (
                     <>
@@ -443,7 +448,7 @@ export default function AdminAgendaPage() {
                           )
                         })}
 
-                      {day.config && day.freeSlots.length === 0 && day.dayAppts.filter((a) => a.status !== 'cancelled').length === 0 && !day.blocked && (
+                      {day.bloques.length > 0 && day.freeSlots.length === 0 && day.dayAppts.filter((a) => a.status !== 'cancelled').length === 0 && !day.blocked && (
                         <p className="text-xs text-gray-400 text-center py-3">{isPast ? 'Día pasado' : day.isToday ? 'Sin más cupos hoy' : 'Sin cupos'}</p>
                       )}
                     </>

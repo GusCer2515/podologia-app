@@ -1,6 +1,7 @@
 // Lógica compartida de cupos disponibles (booking público y agenda admin)
-// Considera DURACIÓN del servicio, ALMUERZO, SOLAPAMIENTOS y el TIEMPO DE
-// PREPARACIÓN que queda reservado después de cada atención.
+// Cada día puede tener VARIOS BLOQUES de atención (ej. 09:00-13:00 y 15:00-21:30).
+// Considera duración del servicio, solapamientos y el tiempo de preparación
+// que queda reservado después de cada atención.
 import { getAvailability, getBlockouts, getOccupiedSlots, getSetting } from './supabase'
 
 // Los cupos se ofrecen cada 15 minutos
@@ -45,15 +46,29 @@ export function clearBuffersCache() {
 export const bufferDe = (tipo: string | null | undefined, b: Buffers) =>
   tipo === 'manicura' ? b.manicura : b.podologia
 
+export interface Bloque {
+  start: number
+  end: number
+}
+
 export interface DayInfo {
   blocked: boolean
   message: string
-  start: number
-  end: number
-  lunchStart: number | null
-  lunchEnd: number | null
+  bloques: Bloque[] // bloques de atención del día, ordenados
   busy: { start: number; end: number }[] // ya incluye el tiempo de preparación
   buffers: Buffers
+}
+
+// Convierte las filas de availability de un día en bloques ordenados
+export function bloquesDelDia(availability: any[], dow: number): Bloque[] {
+  return (availability ?? [])
+    .filter((a: any) => a.day_of_week === dow && a.is_active !== false)
+    .map((a: any) => ({
+      start: toMin(String(a.start_time).substring(0, 5)),
+      end: toMin(String(a.end_time).substring(0, 5)),
+    }))
+    .filter((b) => b.end > b.start)
+    .sort((a, b) => a.start - b.start)
 }
 
 export async function getDayInfo(date: string): Promise<DayInfo> {
@@ -64,24 +79,15 @@ export async function getDayInfo(date: string): Promise<DayInfo> {
     getBuffers(),
   ])
 
-  const empty: DayInfo = {
-    blocked: false,
-    message: '',
-    start: 0,
-    end: 0,
-    lunchStart: null,
-    lunchEnd: null,
-    busy: [],
-    buffers,
-  }
+  const empty: DayInfo = { blocked: false, message: '', bloques: [], busy: [], buffers }
 
   if ((blockouts ?? []).some((b: any) => b.blocked_date === date)) {
     return { ...empty, blocked: true, message: '⛔ Ese día no hay atención (feriado o día bloqueado). Elige otra fecha.' }
   }
 
   const dow = new Date(date + 'T00:00:00').getDay()
-  const config = (availability ?? []).find((a: any) => a.day_of_week === dow)
-  if (!config) {
+  const bloques = bloquesDelDia(availability ?? [], dow)
+  if (bloques.length === 0) {
     return { ...empty, message: '⛔ Ese día no hay atención. Elige otra fecha.' }
   }
 
@@ -91,23 +97,13 @@ export async function getDayInfo(date: string): Promise<DayInfo> {
     return { start: t, end: t + (o.duration || 60) + bufferDe(o.tipo, buffers) }
   })
 
-  return {
-    blocked: false,
-    message: '',
-    start: toMin(String(config.start_time).substring(0, 5)),
-    end: toMin(String(config.end_time).substring(0, 5)),
-    lunchStart: config.lunch_start ? toMin(String(config.lunch_start).substring(0, 5)) : null,
-    lunchEnd: config.lunch_end ? toMin(String(config.lunch_end).substring(0, 5)) : null,
-    busy,
-    buffers,
-  }
+  return { blocked: false, message: '', bloques, busy, buffers }
 }
 
 const overlaps = (aStart: number, aEnd: number, bStart: number, bEnd: number) =>
   aStart < bEnd && bStart < aEnd
 
 // ¿Cabe un servicio de `duration` min empezando en `startMin`?
-// `buffer` es la preparación que quedará reservada después.
 export function fits(
   info: DayInfo,
   startMin: number,
@@ -116,12 +112,13 @@ export function fits(
   buffer = 0
 ): boolean {
   const finAtencion = startMin + duration
-  const finConPrep = finAtencion + buffer
 
-  // La atención debe terminar dentro del horario (la preparación puede quedar fuera)
-  if (finAtencion > info.end) return false
-  if (info.lunchStart != null && info.lunchEnd != null && overlaps(startMin, finAtencion, info.lunchStart, info.lunchEnd))
-    return false
+  // Debe caber completo dentro de ALGÚN bloque de atención
+  const dentroDeBloque = info.bloques.some((b) => startMin >= b.start && finAtencion <= b.end)
+  if (!dentroDeBloque) return false
+
+  // No puede pisar otra cita ni su tiempo de preparación
+  const finConPrep = finAtencion + buffer
   for (const b of info.busy) if (overlaps(startMin, finConPrep, b.start, b.end)) return false
 
   if (date === todayLocalStr()) {
@@ -143,18 +140,20 @@ export async function getAvailableSlots(
   tipo: 'podologia' | 'manicura' = 'podologia'
 ): Promise<SlotsResult> {
   const info = await getDayInfo(date)
-  if (info.blocked || info.start === info.end) {
+  if (info.blocked || info.bloques.length === 0) {
     return { slots: [], message: info.message || '⛔ Ese día no hay atención.' }
   }
   const buffer = bufferDe(tipo, info.buffers)
   const out: string[] = []
-  for (let t = info.start; t + duration <= info.end; t += PASO_MIN) {
-    if (fits(info, t, duration, date, buffer)) out.push(toHHMM(t))
+  for (const bloque of info.bloques) {
+    for (let t = bloque.start; t + duration <= bloque.end; t += PASO_MIN) {
+      if (fits(info, t, duration, date, buffer)) out.push(toHHMM(t))
+    }
   }
   if (out.length === 0) {
     return { slots: [], message: '😔 No quedan horas disponibles ese día. Elige otra fecha.' }
   }
-  return { slots: out, message: '' }
+  return { slots: Array.from(new Set(out)).sort(), message: '' }
 }
 
 export { toMin, toHHMM }

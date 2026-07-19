@@ -175,6 +175,30 @@ export async function getAllAvailability() {
   return data
 }
 
+// Reemplaza TODOS los bloques de atención de un día
+export async function saveDayBlocks(
+  dayOfWeek: number,
+  bloques: { start_time: string; end_time: string }[]
+) {
+  const { error: delError } = await supabase
+    .from('availability')
+    .delete()
+    .eq('day_of_week', dayOfWeek)
+  if (delError) throw delError
+
+  if (bloques.length === 0) return
+
+  const { error } = await supabase.from('availability').insert(
+    bloques.map((b) => ({
+      day_of_week: dayOfWeek,
+      start_time: b.start_time,
+      end_time: b.end_time,
+      is_active: true,
+    }))
+  )
+  if (error) throw error
+}
+
 export async function saveAvailability(dayOfWeek: number, fields: any) {
   const { data: existing, error: qError } = await supabase
     .from('availability')

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import {
   getAllAvailability,
-  saveAvailability,
+  saveDayBlocks,
   getBlockouts,
   addBlockout,
   deleteBlockout,
@@ -33,10 +33,7 @@ const DIAS = [
 
 type DayConfig = {
   is_active: boolean
-  start_time: string
-  end_time: string
-  lunch_start: string
-  lunch_end: string
+  bloques: { start_time: string; end_time: string }[]
 }
 
 const fmtCLP = (n: number) =>
@@ -77,13 +74,16 @@ export default function SettingsPage() {
 
     const map: Record<number, DayConfig> = {}
     for (const d of DIAS) {
-      const row = (avail ?? []).find((a: any) => a.day_of_week === d.dow)
+      const filas = (avail ?? [])
+        .filter((a: any) => a.day_of_week === d.dow && a.is_active !== false)
+        .map((a: any) => ({
+          start_time: String(a.start_time).substring(0, 5),
+          end_time: String(a.end_time).substring(0, 5),
+        }))
+        .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time))
       map[d.dow] = {
-        is_active: row?.is_active ?? false,
-        start_time: row?.start_time?.substring(0, 5) ?? '09:00',
-        end_time: row?.end_time?.substring(0, 5) ?? '18:00',
-        lunch_start: row?.lunch_start?.substring(0, 5) ?? '',
-        lunch_end: row?.lunch_end?.substring(0, 5) ?? '',
+        is_active: filas.length > 0,
+        bloques: filas.length > 0 ? filas : [{ start_time: '09:00', end_time: '18:00' }],
       }
     }
     setDays(map)
@@ -102,26 +102,58 @@ export default function SettingsPage() {
   const setDay = (dow: number, field: keyof DayConfig, value: any) =>
     setDays((prev) => ({ ...prev, [dow]: { ...prev[dow], [field]: value } }))
 
+  // Editar un bloque puntual del día
+  const setBloque = (dow: number, idx: number, campo: 'start_time' | 'end_time', valor: string) =>
+    setDays((prev) => {
+      const bloques = prev[dow].bloques.map((b, i) => (i === idx ? { ...b, [campo]: valor } : b))
+      return { ...prev, [dow]: { ...prev[dow], bloques } }
+    })
+
+  const addBloque = (dow: number) =>
+    setDays((prev) => {
+      const ultimo = prev[dow].bloques[prev[dow].bloques.length - 1]
+      const nuevo = ultimo
+        ? { start_time: ultimo.end_time, end_time: '21:30' }
+        : { start_time: '09:00', end_time: '13:00' }
+      return { ...prev, [dow]: { ...prev[dow], bloques: [...prev[dow].bloques, nuevo] } }
+    })
+
+  const removeBloque = (dow: number, idx: number) =>
+    setDays((prev) => ({
+      ...prev,
+      [dow]: { ...prev[dow], bloques: prev[dow].bloques.filter((_, i) => i !== idx) },
+    }))
+
   const saveHours = async () => {
+    // Validaciones: horas coherentes y bloques que no se pisen
     for (const d of DIAS) {
       const c = days[d.dow]
-      if (c?.is_active && c.start_time >= c.end_time) {
-        showToast(`${d.nombre}: la hora de inicio debe ser antes que la de término`, 'error')
+      if (!c?.is_active) continue
+      if (c.bloques.length === 0) {
+        showToast(`${d.nombre}: agrega al menos un bloque o desactiva el día`, 'error')
         return
       }
+      for (const b of c.bloques) {
+        if (b.start_time >= b.end_time) {
+          showToast(`${d.nombre}: el bloque ${b.start_time}–${b.end_time} está invertido`, 'error')
+          return
+        }
+      }
+      const orden = [...c.bloques].sort((a, b) => a.start_time.localeCompare(b.start_time))
+      for (let i = 1; i < orden.length; i++) {
+        if (orden[i].start_time < orden[i - 1].end_time) {
+          showToast(`${d.nombre}: hay bloques que se superponen`, 'error')
+          return
+        }
+      }
     }
+
     setSavingHours(true)
     try {
       for (const d of DIAS) {
         const c = days[d.dow]
         if (!c) continue
-        await saveAvailability(d.dow, {
-          is_active: c.is_active,
-          start_time: c.start_time,
-          end_time: c.end_time,
-          lunch_start: c.lunch_start || null,
-          lunch_end: c.lunch_end || null,
-        })
+        await saveDayBlocks(d.dow, c.is_active ? c.bloques : [])
       }
       showToast('Horarios guardados correctamente')
     } catch (err) {
@@ -305,9 +337,10 @@ export default function SettingsPage() {
       <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
         <h2 className="font-display text-2xl text-tinta font-semibold mb-1">🕐 Horarios de atención</h2>
         <p className="text-sm text-gray-500 mb-5">
-          Define qué días atiendes, el horario y el bloque de almuerzo (no agendable). Cada
-          atención de podología dura 1 hora; las manicuras usan la duración de cada servicio.
-          Esto controla las horas disponibles tanto para ti como para los pacientes en la web.
+          Define qué días atiendes y en qué <strong>bloques de horario</strong>. Puedes tener
+          varios bloques por día (ej: 09:00–13:00 y 15:00–21:30); el espacio entre ellos no
+          estará disponible. Cada podología dura 1 hora; las manicuras usan la duración de su
+          servicio. Esto controla las horas que ves tú y las que ven los pacientes en la web.
         </p>
 
         <div className="space-y-2">
@@ -317,62 +350,63 @@ export default function SettingsPage() {
             return (
               <div
                 key={d.dow}
-                className={`flex flex-wrap items-center gap-3 px-4 py-2.5 rounded-xl border ${
+                className={`px-4 py-3 rounded-xl border ${
                   c.is_active ? 'border-salvia/40 bg-white' : 'border-arena bg-arena/30 opacity-70'
                 }`}
               >
-                <label className="flex items-center gap-2 w-32 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={c.is_active}
-                    onChange={(e) => setDay(d.dow, 'is_active', e.target.checked)}
-                    className="w-4 h-4 accent-[#33506e]"
-                  />
-                  <span className="font-semibold text-tinta text-sm">{d.nombre}</span>
-                </label>
+                <div className="flex flex-wrap items-start gap-4">
+                  <label className="flex items-center gap-2 w-32 cursor-pointer pt-1.5">
+                    <input
+                      type="checkbox"
+                      checked={c.is_active}
+                      onChange={(e) => setDay(d.dow, 'is_active', e.target.checked)}
+                      className="w-4 h-4 accent-[#33506e]"
+                    />
+                    <span className="font-semibold text-tinta text-sm">{d.nombre}</span>
+                  </label>
 
-                {c.is_active ? (
-                  <>
-                    <label className="text-xs text-gray-500">
-                      Desde{' '}
-                      <input
-                        type="time"
-                        value={c.start_time}
-                        onChange={(e) => setDay(d.dow, 'start_time', e.target.value)}
-                        className={inputClass}
-                      />
-                    </label>
-                    <label className="text-xs text-gray-500">
-                      Hasta{' '}
-                      <input
-                        type="time"
-                        value={c.end_time}
-                        onChange={(e) => setDay(d.dow, 'end_time', e.target.value)}
-                        className={inputClass}
-                      />
-                    </label>
-                    <label className="text-xs text-gray-500">
-                      🍽 Almuerzo{' '}
-                      <input
-                        type="time"
-                        value={c.lunch_start}
-                        onChange={(e) => setDay(d.dow, 'lunch_start', e.target.value)}
-                        className={inputClass}
-                      />
-                    </label>
-                    <label className="text-xs text-gray-500">
-                      a{' '}
-                      <input
-                        type="time"
-                        value={c.lunch_end}
-                        onChange={(e) => setDay(d.dow, 'lunch_end', e.target.value)}
-                        className={inputClass}
-                      />
-                    </label>
-                  </>
-                ) : (
-                  <span className="text-sm text-gray-400">Sin atención</span>
-                )}
+                  {c.is_active ? (
+                    <div className="flex-1 space-y-2">
+                      {c.bloques.map((b, idx) => (
+                        <div key={idx} className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-bold text-tinta-suave w-16">
+                            Bloque {idx + 1}
+                          </span>
+                          <input
+                            type="time"
+                            value={b.start_time}
+                            onChange={(e) => setBloque(d.dow, idx, 'start_time', e.target.value)}
+                            className={inputClass}
+                          />
+                          <span className="text-gray-400 text-sm">a</span>
+                          <input
+                            type="time"
+                            value={b.end_time}
+                            onChange={(e) => setBloque(d.dow, idx, 'end_time', e.target.value)}
+                            className={inputClass}
+                          />
+                          {c.bloques.length > 1 && (
+                            <button
+                              onClick={() => removeBloque(d.dow, idx)}
+                              className="text-rosa/70 hover:text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 text-sm transition"
+                              title="Quitar este bloque"
+                            >
+                              🗑
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => addBloque(d.dow)}
+                        className="text-xs font-bold text-tinta border border-dashed border-arena rounded-full px-4 py-1.5 hover:border-tinta-suave hover:bg-rosa-palo/20 transition"
+                      >
+                        + Agregar bloque
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-400 pt-1.5">Sin atención</span>
+                  )}
+                </div>
               </div>
             )
           })}
