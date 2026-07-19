@@ -53,6 +53,11 @@ export default function SettingsPage() {
   const [bufPod, setBufPod] = useState('15')
   const [bufMan, setBufMan] = useState('10')
   const [savingBuffers, setSavingBuffers] = useState(false)
+  // Horas fijas ofrecidas en el sitio público
+  const [horasPublicas, setHorasPublicas] = useState(
+    '08:30,09:00,09:15,10:45,11:45,15:30,16:00,16:45,17:45,18:45,19:45'
+  )
+  const [savingHorasPub, setSavingHorasPub] = useState(false)
   const [savingPrecio, setSavingPrecio] = useState(false)
   const [newBlockDate, setNewBlockDate] = useState('')
   const [newBlockNote, setNewBlockNote] = useState('')
@@ -63,16 +68,18 @@ export default function SettingsPage() {
 
   const load = async () => {
     // Cada recurso se carga por separado: si uno falla, el resto funciona
-    const [avail, blocks, convs, precio, bp, bm] = await Promise.all([
+    const [avail, blocks, convs, precio, bp, bm, hp] = await Promise.all([
       getAllAvailability().catch(() => []),
       getBlockouts().catch(() => []),
       getConvenios().catch(() => null), // null = tabla no existe aún
       getSetting('precio_particular').catch(() => null),
       getSetting('buffer_podologia').catch(() => null),
       getSetting('buffer_manicura').catch(() => null),
+      getSetting('public_slots').catch(() => null),
     ])
     if (bp) setBufPod(bp)
     if (bm) setBufMan(bm)
+    if (hp) setHorasPublicas(hp)
 
     const map: Record<number, DayConfig> = {}
     for (const d of DIAS) {
@@ -163,6 +170,31 @@ export default function SettingsPage() {
       showToast('Error guardando los horarios', 'error')
     } finally {
       setSavingHours(false)
+    }
+  }
+
+  const saveHorasPublicas = async () => {
+    const lista = horasPublicas
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (lista.length === 0 || lista.some((h) => !/^\d{1,2}:\d{2}$/.test(h))) {
+      showToast('Usa el formato HH:MM separado por comas (ej: 08:30,09:00)', 'error')
+      return
+    }
+    setSavingHorasPub(true)
+    try {
+      const ordenadas = lista
+        .map((h) => (h.length === 4 ? `0${h}` : h))
+        .sort()
+      await saveSetting('public_slots', ordenadas.join(','))
+      setHorasPublicas(ordenadas.join(','))
+      showToast('Horas del sitio público guardadas')
+    } catch (err) {
+      console.error(err)
+      showToast('Error guardando (¿ejecutaste el SQL de fase 25?)', 'error')
+    } finally {
+      setSavingHorasPub(false)
     }
   }
 
@@ -444,6 +476,32 @@ export default function SettingsPage() {
         >
           {savingHours ? 'Guardando...' : '💾 Guardar horarios'}
         </button>
+
+        {/* Horas fijas que se ofrecen en el sitio público */}
+        <div className="mt-6 pt-5 border-t border-arena">
+          <p className="font-bold text-tinta text-sm">🌐 Horas que ven los pacientes en la web</p>
+          <p className="text-xs text-gray-500 mb-3">
+            Lista fija de horas de inicio que se ofrecen en el sitio (podología). De estas, el
+            paciente solo verá las que estén realmente libres ese día. Sepáralas con coma.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <input
+              type="text"
+              value={horasPublicas}
+              onChange={(e) => setHorasPublicas(e.target.value)}
+              disabled={horariosBloqueados}
+              placeholder="08:30,09:00,10:45,15:30..."
+              className={`flex-1 min-w-72 ${inputClass} disabled:bg-arena/40 disabled:text-gray-500`}
+            />
+            <button
+              onClick={saveHorasPublicas}
+              disabled={savingHorasPub || horariosBloqueados}
+              className="bg-salvia text-marfil px-6 py-2 rounded-full font-bold hover:opacity-90 transition disabled:opacity-50"
+            >
+              {savingHorasPub ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </div>
 
         {/* Tiempo de preparación entre atenciones */}
         <div className="mt-6 pt-5 border-t border-arena">

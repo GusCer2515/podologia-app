@@ -133,6 +133,34 @@ export interface SlotsResult {
   message: string
 }
 
+// ============ Horas fijas ofrecidas en el sitio público ============
+const HORAS_PUBLICAS_DEFECTO =
+  '08:30,09:00,09:15,10:45,11:45,15:30,16:00,16:45,17:45,18:45,19:45'
+
+export async function getPublicSlotTimes(): Promise<string[]> {
+  const v = await getSetting('public_slots').catch(() => null)
+  const raw: string = v || HORAS_PUBLICAS_DEFECTO
+  return raw
+    .split(',')
+    .map((s: string) => s.trim())
+    .filter(Boolean)
+    .sort()
+}
+
+// Horas que ve el paciente: de la lista fija, solo las realmente disponibles
+// (dentro de un bloque de atención y sin chocar con otra cita ni su preparación)
+export async function getPublicAvailableSlots(date: string): Promise<SlotsResult> {
+  const [info, fijas] = await Promise.all([getDayInfo(date), getPublicSlotTimes()])
+  if (info.blocked || info.bloques.length === 0) {
+    return { slots: [], message: info.message || '⛔ Ese día no hay atención.' }
+  }
+  const slots = fijas.filter((h) => fits(info, toMin(h), 60, date, info.buffers.podologia))
+  if (slots.length === 0) {
+    return { slots: [], message: '😔 No quedan horas disponibles ese día. Elige otra fecha.' }
+  }
+  return { slots, message: '' }
+}
+
 // Horas de inicio disponibles para un servicio de `duration` minutos
 export async function getAvailableSlots(
   date: string,

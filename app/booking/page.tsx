@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { bookAppointment, findPatientByRut } from '@/lib/supabase'
-import { getAvailableSlots } from '@/lib/slots'
+import { getPublicAvailableSlots } from '@/lib/slots'
 import { CLINIC, getClinicInfo, type ClinicInfo } from '@/lib/clinicConfig'
 
 type ModalState =
@@ -59,7 +59,8 @@ export default function BookingPage() {
     if (!date) return
     setLoadingSlots(true)
     try {
-      const res = await getAvailableSlots(date, 60) // podología = 1 hora
+      // Horas fijas de atención, filtradas por disponibilidad real del día
+      const res = await getPublicAvailableSlots(date)
       setSlots(res.slots)
       setDayMessage(res.message)
     } catch (error) {
