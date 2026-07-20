@@ -1,93 +1,53 @@
 import { NextResponse } from 'next/server'
 import { getClinicInfo } from '@/lib/clinicConfig'
+import {
+  sendEmail,
+  emailBase,
+  nombreServicio,
+  fechaLarga,
+  getAppointmentContact,
+  marcarEnviado,
+  emailValido,
+} from '@/lib/email'
 
 // ============================================================
-// Envía correos de confirmación al reservar una cita:
+// Correos al reservar una cita (podología o manicura):
 // 1. Al paciente (confirmación)
 // 2. A la clínica (aviso de nueva reserva)
 // Usa BREVO (plan gratis permanente: 300 correos/día)
 // La API key vive SOLO en el servidor
 // ============================================================
 
-async function sendEmail(to: string, subject: string, html: string, fromName: string) {
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      'api-key': process.env.BREVO_API_KEY!,
-      'Content-Type': 'application/json',
-      accept: 'application/json',
-    },
-    body: JSON.stringify({
-      sender: { email: process.env.BREVO_FROM_EMAIL, name: fromName },
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-    }),
-  })
-  if (!res.ok) {
-    const detail = await res.text()
-    const err: any = new Error(`Brevo ${res.status}: ${detail}`)
-    err.brevoStatus = res.status
-    err.brevoDetail = detail
-    throw err
-  }
-}
-
-function emailBase(info: any, contenido: string) {
-  return `
-  <div style="background:#faf6f0;padding:32px 16px;font-family:Georgia,serif;color:#43414a">
-    <div style="max-width:520px;margin:0 auto;background:#fffdf9;border-radius:20px;padding:36px;border:1px solid #f1e9de">
-      <h1 style="font-style:italic;color:#33506e;text-align:center;margin:0 0 4px;font-weight:600">
-        ${info.brand}
-      </h1>
-      <p style="text-align:center;color:#c96f85;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin:0 0 28px">
-        ${info.subtitle}
-      </p>
-      ${contenido}
-      <hr style="border:none;border-top:1px solid #f1e9de;margin:28px 0 16px" />
-      <p style="text-align:center;font-size:12px;color:#999;margin:0">
-        ${info.professional} · ${info.instagram} · ${info.phone}
-      </p>
-    </div>
-  </div>`
-}
-
 export async function POST(req: Request) {
   try {
     const body = await req.json()
     // soloPaciente: cuando agenda la propia clínica, no se envía el aviso interno
-    const { appointmentId, date, time, soloPaciente } = body
-    let { name, email, phone } = body
+    const { appointmentId, soloPaciente } = body
+    let { name, email, phone, date, time } = body
 
-    if (!appointmentId || !date || !time) {
+    if (!appointmentId) {
       return NextResponse.json({ ok: false }, { status: 400 })
     }
 
     // Obtener contacto real desde la BD por el id de la cita.
     // Esto verifica que la cita exista Y recupera el email de pacientes
     // recurrentes que agendaron solo con su RUT.
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/get_appointment_contact`,
-      {
-        method: 'POST',
-        headers: {
-          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ p_id: appointmentId }),
-      }
-    )
-    const contact = await res.json()
+    const contact = await getAppointmentContact(appointmentId)
     if (!contact?.found) {
       return NextResponse.json({ ok: false }, { status: 400 })
     }
     name = contact.name || name
     email = contact.email || email
     phone = contact.phone || phone
+    // La fecha y hora se toman de la BD: es la fuente confiable
+    date = contact.fecha || date
+    time = contact.hora || time
 
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    if (!date || !time) {
       return NextResponse.json({ ok: false }, { status: 400 })
+    }
+    if (!emailValido(email)) {
+      return NextResponse.json({ ok: false, reason: 'sin_email' }, { status: 400 })
     }
 
     if (!process.env.BREVO_API_KEY || !process.env.BREVO_FROM_EMAIL) {
@@ -97,13 +57,8 @@ export async function POST(req: Request) {
 
     // Datos de contacto vigentes (editables desde el panel)
     const info = await getClinicInfo()
-
-    const fecha = new Date(date + 'T00:00:00').toLocaleDateString('es-CL', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
+    const fecha = fechaLarga(date)
+    const servicio = nombreServicio(contact.tipo, contact.servicio)
 
     // 1. Correo al paciente
     await sendEmail(
@@ -115,6 +70,7 @@ export async function POST(req: Request) {
         <div style="background:#f3dee2;border-radius:14px;padding:18px 22px;margin:18px 0">
           <p style="margin:0;font-size:16px">📅 <strong>${fecha}</strong></p>
           <p style="margin:6px 0 0;font-size:16px">🕐 <strong>${time} hrs</strong></p>
+          <p style="margin:6px 0 0;font-size:16px">${servicio}</p>
         </div>
         ${
           contact.es_nuevo
@@ -133,6 +89,8 @@ export async function POST(req: Request) {
       info.brand
     )
 
+    await marcarEnviado(appointmentId, 'confirmacion')
+
     // 2. Aviso a la clínica (se omite si la propia clínica agendó la hora)
     if (soloPaciente) {
       return NextResponse.json({ ok: true, soloPaciente: true })
@@ -146,6 +104,7 @@ export async function POST(req: Request) {
         <div style="background:#f1e9de;border-radius:14px;padding:18px 22px;margin:18px 0;font-size:15px">
           <p style="margin:0">👤 <strong>${name}</strong></p>
           <p style="margin:6px 0 0">📅 ${fecha} · 🕐 ${time} hrs</p>
+          <p style="margin:6px 0 0">${servicio}</p>
           <p style="margin:6px 0 0">📞 ${phone || 'Sin teléfono'}</p>
           <p style="margin:6px 0 0">✉️ ${email}</p>
         </div>

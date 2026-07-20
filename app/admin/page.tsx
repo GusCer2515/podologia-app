@@ -23,6 +23,7 @@ import {
 } from '@/lib/slots'
 import { initials, colorFor } from '@/lib/avatar'
 import { showToast } from '@/components/toast'
+import CorreosPendientes from '@/components/CorreosPendientes'
 
 const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
@@ -136,6 +137,22 @@ export default function AdminAgendaPage() {
   const setStatus = async (id: string, status: string) => {
     try {
       await updateAppointmentStatus(id, status)
+      // Al cancelar, avisar al paciente por correo. Va después de guardar
+      // el estado: si el correo falla, la cancelación igual quedó hecha.
+      if (status === 'cancelled') {
+        fetch('/api/notify-cancellation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ appointmentId: id }),
+        })
+          .then((r) => r.json())
+          .then((r) => {
+            if (r?.ok) showToast('Hora cancelada · aviso enviado al paciente')
+            else if (r?.reason === 'sin_email')
+              showToast('Hora cancelada. El paciente no tiene correo registrado.')
+          })
+          .catch(() => {})
+      }
       loadWeek(weekStart)
     } catch (err) {
       showToast('Error actualizando la cita', 'error')
@@ -482,6 +499,9 @@ export default function AdminAgendaPage() {
           )
         )}
       </div>
+
+      {/* Citas futuras que quedaron sin correo de confirmacion */}
+      <CorreosPendientes />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">

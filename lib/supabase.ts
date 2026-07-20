@@ -701,6 +701,20 @@ export async function rescheduleAppointment(id: string, datetime: string) {
   if (error) throw error
 }
 
+// Citas futuras que quedaron sin correo de confirmación
+export async function getPendingConfirmations() {
+  const { data, error } = await supabase.rpc('pending_confirmations')
+  if (error) throw error
+  return (data ?? []) as {
+    id: string
+    appointment_date: string
+    tipo: string
+    servicio: string | null
+    patient_name: string
+    patient_email: string
+  }[]
+}
+
 export async function updateAppointmentStatus(id: string, status: string) {
   const { error } = await supabase
     .from('appointments')
