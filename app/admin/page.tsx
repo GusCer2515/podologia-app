@@ -10,6 +10,8 @@ import {
   getPatients,
   adminCreateAppointment,
   getNailServices,
+  createPatientAdmin,
+  getConvenios,
 } from '@/lib/supabase'
 import {
   todayLocalStr,
@@ -23,6 +25,10 @@ import { initials, colorFor } from '@/lib/avatar'
 import { showToast } from '@/components/toast'
 
 const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
+const normRut = (s: any) => String(s ?? '').replace(/[^0-9kK]/g, '').toUpperCase()
+
+const PACIENTE_VACIO = { name: '', rut: '', phone: '', email: '', insurance: '' }
 
 function mondayOf(d: Date): Date {
   const monday = new Date(d)
@@ -79,6 +85,11 @@ export default function AdminAgendaPage() {
   const [bookTipo, setBookTipo] = useState<'podologia' | 'manicura'>('podologia')
   const [bookServiceId, setBookServiceId] = useState('')
   const [savingBook, setSavingBook] = useState(false)
+  // Alta rápida de paciente sin salir de la agenda
+  const [convenios, setConvenios] = useState<any[]>([])
+  const [showNuevoPaciente, setShowNuevoPaciente] = useState(false)
+  const [nuevoPaciente, setNuevoPaciente] = useState({ ...PACIENTE_VACIO })
+  const [creandoPaciente, setCreandoPaciente] = useState(false)
   // El admin confirma agendar sin tiempo de preparación
   const [aceptaAjustado, setAceptaAjustado] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<any>(null)
@@ -113,6 +124,7 @@ export default function AdminAgendaPage() {
     getPatients().then((p) => setPatients(p || [])).catch(() => {})
     getNailServices(true).then((s) => setNailServices(s || [])).catch(() => {})
     getBuffers().then(setBuffers).catch(() => {})
+    getConvenios().then((c) => setConvenios(c || [])).catch(() => {})
   }, [])
 
   const changeWeek = (delta: number) => {
@@ -195,6 +207,73 @@ export default function AdminAgendaPage() {
     setBookNotes('')
     setBookTipo('podologia')
     setBookServiceId('')
+    setShowNuevoPaciente(false)
+    setNuevoPaciente({ ...PACIENTE_VACIO })
+  }
+
+  // Abre el formulario de alta rápida aprovechando lo ya escrito en el
+  // buscador: si son dígitos va al RUT, si no al nombre
+  const abrirNuevoPaciente = () => {
+    const t = bookSearch.trim()
+    const soloDigitos = /^[0-9kK.\-\s]+$/.test(t)
+    setNuevoPaciente({
+      ...PACIENTE_VACIO,
+      name: t && !soloDigitos ? t : '',
+      rut: t && soloDigitos ? t : '',
+    })
+    setShowNuevoPaciente(true)
+  }
+
+  // Crea el paciente y lo deja seleccionado, sin salir de la agenda
+  const crearPacienteRapido = async () => {
+    const nombre = nuevoPaciente.name.trim()
+    const rut = nuevoPaciente.rut.trim()
+    if (!nombre || !rut) {
+      showToast('Nombre y RUT son obligatorios', 'error')
+      return
+    }
+    const yaExiste = patients.find((p) => p.rut && normRut(p.rut) === normRut(rut))
+    if (yaExiste) {
+      // No se crea un duplicado: se selecciona el que ya estaba
+      setBookPatient(yaExiste.id)
+      setShowNuevoPaciente(false)
+      setBookSearch(yaExiste.name)
+      showToast(`Ese RUT ya es de ${yaExiste.name}. Lo dejé seleccionado.`, 'error')
+      return
+    }
+
+    setCreandoPaciente(true)
+    try {
+      // El correo es obligatorio en la base. Si no lo tiene a mano, se
+      // genera uno interno a partir del RUT (se corrige luego en su ficha)
+      const email =
+        nuevoPaciente.email.trim().toLowerCase() || `${normRut(rut).toLowerCase()}@sincorreo.local`
+
+      const creado = await createPatientAdmin({
+        name: nombre,
+        rut,
+        phone: nuevoPaciente.phone.trim() || null,
+        email,
+        insurance: nuevoPaciente.insurance || null,
+      })
+
+      setPatients((prev) => [...prev, creado])
+      setBookPatient(creado.id)
+      setBookSearch(nombre)
+      setShowNuevoPaciente(false)
+      setNuevoPaciente({ ...PACIENTE_VACIO })
+      showToast(`${nombre} creado y seleccionado`)
+    } catch (err: any) {
+      console.error(err)
+      showToast(
+        err?.code === '23505'
+          ? 'Ya existe un paciente con ese RUT o correo'
+          : 'Error creando el paciente',
+        'error'
+      )
+    } finally {
+      setCreandoPaciente(false)
+    }
   }
 
   const confirmBook = async () => {
@@ -689,18 +768,114 @@ export default function AdminAgendaPage() {
 
             <input type="text" value={bookSearch} onChange={(e) => setBookSearch(e.target.value)} placeholder="🔍 Buscar paciente por nombre, RUT o teléfono..." className="w-full mt-4 px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
 
-            <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
-              {filteredPatients.length === 0 ? (
-                <p className="text-sm text-gray-400 p-3">No se encontró el paciente. Créalo en 👥 Pacientes.</p>
-              ) : (
-                filteredPatients.map((p) => (
-                  <button key={p.id} onClick={() => setBookPatient(p.id)} className={`w-full text-left px-3 py-2 rounded-xl text-sm border transition ${bookPatient === p.id ? 'bg-tinta text-marfil border-tinta' : 'bg-white border-arena hover:border-tinta-suave'}`}>
-                    <span className="font-semibold">{p.name}</span>
-                    <span className={bookPatient === p.id ? 'text-marfil/70' : 'text-gray-400'}> · {p.rut || 'sin RUT'}</span>
+            {!showNuevoPaciente && (
+              <>
+                <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
+                  {filteredPatients.length === 0 ? (
+                    <div className="text-center py-4 px-3 bg-arena/30 rounded-xl border border-dashed border-arena">
+                      <p className="text-sm text-gray-500">
+                        {bookSearch.trim()
+                          ? 'Ningún paciente coincide con esa búsqueda.'
+                          : 'Aún no hay pacientes registrados.'}
+                      </p>
+                      <button
+                        onClick={abrirNuevoPaciente}
+                        className="mt-2 bg-salvia text-marfil px-5 py-2 rounded-full text-sm font-bold hover:opacity-90 transition"
+                      >
+                        ➕ Crear paciente nuevo
+                      </button>
+                    </div>
+                  ) : (
+                    filteredPatients.map((p) => (
+                      <button key={p.id} onClick={() => setBookPatient(p.id)} className={`w-full text-left px-3 py-2 rounded-xl text-sm border transition ${bookPatient === p.id ? 'bg-tinta text-marfil border-tinta' : 'bg-white border-arena hover:border-tinta-suave'}`}>
+                        <span className="font-semibold">{p.name}</span>
+                        <span className={bookPatient === p.id ? 'text-marfil/70' : 'text-gray-400'}> · {p.rut || 'sin RUT'}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                {/* Siempre a mano: el paciente podría estar guardado con otro nombre */}
+                {filteredPatients.length > 0 && (
+                  <button
+                    onClick={abrirNuevoPaciente}
+                    className="mt-2 w-full text-sm font-bold text-salvia hover:underline"
+                  >
+                    ➕ ¿Es un paciente nuevo? Créalo aquí mismo
                   </button>
-                ))
-              )}
-            </div>
+                )}
+              </>
+            )}
+
+            {/* ===== Alta rapida de paciente ===== */}
+            {showNuevoPaciente && (
+              <div className="mt-3 bg-salvia/10 border-2 border-salvia/40 rounded-2xl p-4 space-y-2.5 animate-fade-up">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-tinta text-sm">➕ Nuevo paciente</p>
+                  <button
+                    onClick={() => setShowNuevoPaciente(false)}
+                    className="text-xs text-gray-500 hover:text-tinta font-semibold"
+                  >
+                    ← Volver a la búsqueda
+                  </button>
+                </div>
+
+                <input
+                  type="text"
+                  autoFocus
+                  value={nuevoPaciente.name}
+                  onChange={(e) => setNuevoPaciente((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="Nombre completo *"
+                  className="w-full px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-salvia"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={nuevoPaciente.rut}
+                    onChange={(e) => setNuevoPaciente((p) => ({ ...p, rut: e.target.value }))}
+                    placeholder="RUT *"
+                    className="w-full px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-salvia"
+                  />
+                  <input
+                    type="tel"
+                    value={nuevoPaciente.phone}
+                    onChange={(e) => setNuevoPaciente((p) => ({ ...p, phone: e.target.value }))}
+                    placeholder="Teléfono"
+                    className="w-full px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-salvia"
+                  />
+                </div>
+                <input
+                  type="email"
+                  value={nuevoPaciente.email}
+                  onChange={(e) => setNuevoPaciente((p) => ({ ...p, email: e.target.value }))}
+                  placeholder="Correo (opcional)"
+                  className="w-full px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-salvia"
+                />
+                <select
+                  value={nuevoPaciente.insurance}
+                  onChange={(e) => setNuevoPaciente((p) => ({ ...p, insurance: e.target.value }))}
+                  className="w-full px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-salvia"
+                >
+                  <option value="">— Particular (sin convenio) —</option>
+                  {convenios.map((c) => (
+                    <option key={c.id} value={c.nombre}>
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={crearPacienteRapido}
+                  disabled={creandoPaciente}
+                  className="w-full bg-salvia text-marfil py-2.5 rounded-full text-sm font-bold hover:opacity-90 transition disabled:opacity-50"
+                >
+                  {creandoPaciente ? 'Creando...' : '✔ Crear y seleccionar'}
+                </button>
+                <p className="text-[11px] text-gray-500 text-center">
+                  Sin correo se genera uno interno. Su ficha clínica se completa después en 👥 Pacientes.
+                </p>
+              </div>
+            )}
 
             <input type="text" value={bookNotes} onChange={(e) => setBookNotes(e.target.value)} placeholder="Notas (opcional)" className="w-full mt-3 px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-tinta-suave" />
 
