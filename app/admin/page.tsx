@@ -667,7 +667,7 @@ export default function AdminAgendaPage() {
       {/* Modal agendar dentro del tramo libre */}
       {bookSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4">
-          <div className="bg-marfil rounded-3xl shadow-2xl border border-arena max-w-md w-full p-7 animate-fade-up max-h-[90vh] overflow-y-auto">
+          <div className="bg-marfil rounded-3xl shadow-2xl border border-arena max-w-2xl w-full p-7 animate-fade-up max-h-[90vh] overflow-y-auto">
             <h2 className="font-display text-2xl text-tinta font-medium">
               Agendar el{' '}
               <span className="italic">
@@ -711,7 +711,7 @@ export default function AdminAgendaPage() {
                     {dur(duracionSel)}, pero sí en estos horarios del día 👇
                   </p>
                 )}
-                <div className="grid grid-cols-4 gap-2 max-h-44 overflow-y-auto">
+                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-56 overflow-y-auto">
                   {horasDia.map((h) => (
                     <button
                       key={h.hhmm}
@@ -770,7 +770,7 @@ export default function AdminAgendaPage() {
 
             {!showNuevoPaciente && (
               <>
-                <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
+                <div className="mt-2 max-h-52 overflow-y-auto space-y-1">
                   {filteredPatients.length === 0 ? (
                     <div className="text-center py-4 px-3 bg-arena/30 rounded-xl border border-dashed border-arena">
                       <p className="text-sm text-gray-500">
@@ -820,15 +820,15 @@ export default function AdminAgendaPage() {
                   </button>
                 </div>
 
-                <input
-                  type="text"
-                  autoFocus
-                  value={nuevoPaciente.name}
-                  onChange={(e) => setNuevoPaciente((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="Nombre completo *"
-                  className="w-full px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-salvia"
-                />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={nuevoPaciente.name}
+                    onChange={(e) => setNuevoPaciente((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="Nombre completo *"
+                    className="w-full px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-salvia"
+                  />
                   <input
                     type="text"
                     value={nuevoPaciente.rut}
@@ -843,14 +843,14 @@ export default function AdminAgendaPage() {
                     placeholder="Teléfono"
                     className="w-full px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-salvia"
                   />
+                  <input
+                    type="email"
+                    value={nuevoPaciente.email}
+                    onChange={(e) => setNuevoPaciente((p) => ({ ...p, email: e.target.value }))}
+                    placeholder="Correo (opcional)"
+                    className="w-full px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-salvia"
+                  />
                 </div>
-                <input
-                  type="email"
-                  value={nuevoPaciente.email}
-                  onChange={(e) => setNuevoPaciente((p) => ({ ...p, email: e.target.value }))}
-                  placeholder="Correo (opcional)"
-                  className="w-full px-4 py-2 border border-arena rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-salvia"
-                />
                 <select
                   value={nuevoPaciente.insurance}
                   onChange={(e) => setNuevoPaciente((p) => ({ ...p, insurance: e.target.value }))}
