@@ -723,3 +723,36 @@ export async function updateAppointmentStatus(id: string, status: string) {
 
   if (error) throw error
 }
+
+// ============================================================
+// NOTAS / AGENDA PERSONAL DEL ADMIN (privadas)
+// ============================================================
+
+export async function getNotas() {
+  const { data, error } = await supabase
+    .from('notas')
+    .select('*')
+    .order('fijada', { ascending: false })
+    .order('updated_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createNota(payload: any) {
+  const { data, error } = await supabase.from('notas').insert([payload]).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateNota(id: string, fields: any) {
+  const { error } = await supabase
+    .from('notas')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteNota(id: string) {
+  const { error } = await supabase.from('notas').delete().eq('id', id)
+  if (error) throw error
+}

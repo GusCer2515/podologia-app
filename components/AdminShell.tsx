@@ -11,6 +11,7 @@ import NotificationBell from '@/components/NotificationBell'
 const NAV_ITEMS = [
   { href: '/admin', label: '📅 Agenda' },
   { href: '/admin/patients', label: '👥 Pacientes' },
+  { href: '/admin/notes', label: '📝 Notas' },
   { href: '/admin/nails', label: '💅 Nails' },
   { href: '/admin/finance', label: '💰 Finanzas' },
   { href: '/admin/content', label: '🖼 Contenido' },
