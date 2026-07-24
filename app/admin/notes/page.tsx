@@ -19,6 +19,35 @@ const colorDe = (c?: string) => COLORES[c || 'amarillo'] || COLORES.amarillo
 
 const NOTA_VACIA = { titulo: '', contenido: '', color: 'amarillo', fijada: false }
 
+// Cada línea de la nota es una "fila" que se puede tachar. Para no tocar
+// la base, una fila tachada se guarda envuelta en ~~ ~~ dentro de
+// `contenido`; así las notas antiguas siguen funcionando tal cual.
+type Fila = { id: string; texto: string; tachada: boolean }
+
+let _fid = 0
+const nuevoId = () => `f${Date.now().toString(36)}${(_fid++).toString(36)}`
+
+function parseFilas(contenido?: string): Fila[] {
+  const raw = contenido ?? ''
+  if (raw === '') return [{ id: nuevoId(), texto: '', tachada: false }]
+  return raw.split('\n').map((linea) => {
+    const m = linea.match(/^~~(.*)~~$/)
+    return m
+      ? { id: nuevoId(), texto: m[1], tachada: true }
+      : { id: nuevoId(), texto: linea, tachada: false }
+  })
+}
+
+function serializeFilas(filas: Fila[]): string {
+  return filas.map((f) => (f.tachada ? `~~${f.texto}~~` : f.texto)).join('\n')
+}
+
+// La fila crece hacia abajo si el texto ocupa más de una línea
+function autoAlto(el: HTMLTextAreaElement) {
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
+
 function fechaCorta(iso?: string) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -240,9 +269,24 @@ function NotaCard({ nota, onAbrir, onBorrar }: { nota: any; onAbrir: () => void;
           {nota.titulo}
         </p>
       )}
-      <p className="text-sm text-tinta/85 whitespace-pre-wrap break-words line-clamp-[9] flex-1">
-        {nota.contenido || <span className="italic text-tinta/40">Sin contenido</span>}
-      </p>
+      {nota.contenido ? (
+        <div className="text-sm text-tinta/85 break-words flex-1 space-y-0.5 overflow-hidden">
+          {parseFilas(nota.contenido)
+            .slice(0, 9)
+            .map((f) => (
+              <p
+                key={f.id}
+                className={`whitespace-pre-wrap ${f.tachada ? 'line-through text-tinta/40' : ''}`}
+              >
+                {f.texto || ' '}
+              </p>
+            ))}
+        </div>
+      ) : (
+        <p className="text-sm flex-1">
+          <span className="italic text-tinta/40">Sin contenido</span>
+        </p>
+      )}
 
       <div className="flex items-center justify-between mt-3 pt-2 border-t border-black/5">
         <span className="text-[11px] text-tinta/50 font-medium">{fechaCorta(nota.updated_at)}</span>
@@ -276,10 +320,14 @@ function EditorNota({
   onBorrar: () => void
 }) {
   const [titulo, setTitulo] = useState(nota.titulo ?? '')
-  const [contenido, setContenido] = useState(nota.contenido ?? '')
+  const [filas, setFilas] = useState<Fila[]>(() => parseFilas(nota.contenido))
   const [color, setColor] = useState(nota.color ?? 'amarillo')
   const [fijada, setFijada] = useState(!!nota.fijada)
   const [estado, setEstado] = useState<'idle' | 'guardando' | 'guardado'>('idle')
+
+  // Referencias a cada campo para poder mover el cursor entre filas
+  const refs = useRef<Record<string, HTMLTextAreaElement | null>>({})
+  const [focoId, setFocoId] = useState<string | null>(null)
 
   // id real de la nota (se rellena tras el primer guardado si es nueva)
   const idRef = useRef<string | null>(nota.id)
@@ -293,7 +341,7 @@ function EditorNota({
   const c = colorDe(color)
 
   const guardar = useCallback(async () => {
-    const actual = { titulo: titulo.trim(), contenido, color, fijada }
+    const actual = { titulo: titulo.trim(), contenido: serializeFilas(filas), color, fijada }
     const prev = guardadoRef.current
     const sinCambios =
       actual.titulo === prev.titulo &&
@@ -324,13 +372,78 @@ function EditorNota({
       showToast('Error guardando la nota', 'error')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [titulo, contenido, color, fijada])
+  }, [titulo, filas, color, fijada])
 
   // Autoguardado con rebote mientras escribe
   useEffect(() => {
     const t = setTimeout(guardar, 900)
     return () => clearTimeout(t)
   }, [guardar])
+
+  // Cada fila crece sola según el texto que tenga
+  useEffect(() => {
+    filas.forEach((f) => {
+      const el = refs.current[f.id]
+      if (el) autoAlto(el)
+    })
+  }, [filas])
+
+  // Mueve el cursor a la fila recién creada o a la anterior al borrar
+  useEffect(() => {
+    if (!focoId) return
+    const el = refs.current[focoId]
+    if (el) {
+      el.focus()
+      el.setSelectionRange(el.value.length, el.value.length)
+    }
+    setFocoId(null)
+  }, [focoId, filas])
+
+  // En una nota nueva, el cursor parte en la primera fila
+  useEffect(() => {
+    if (!nota.id && filas[0]) setFocoId(filas[0].id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ----- Operaciones sobre las filas -----
+  const setTextoFila = (id: string, texto: string) =>
+    setFilas((fs) => fs.map((f) => (f.id === id ? { ...f, texto: texto.replace(/\n/g, '') } : f)))
+
+  const toggleTachada = (id: string) =>
+    setFilas((fs) => fs.map((f) => (f.id === id ? { ...f, tachada: !f.tachada } : f)))
+
+  // Enter abre una fila nueva justo debajo
+  const filaNuevaTras = (id: string) => {
+    const i = filas.findIndex((f) => f.id === id)
+    const nueva: Fila = { id: nuevoId(), texto: '', tachada: false }
+    const copia = [...filas]
+    copia.splice(i + 1, 0, nueva)
+    setFilas(copia)
+    setFocoId(nueva.id)
+  }
+
+  // Borrar en una fila vacía la elimina y sube el cursor
+  const borrarFilaVacia = (id: string) => {
+    if (filas.length === 1) return
+    const i = filas.findIndex((f) => f.id === id)
+    const copia = filas.filter((f) => f.id !== id)
+    setFilas(copia)
+    const anterior = copia[Math.max(0, i - 1)]
+    if (anterior) setFocoId(anterior.id)
+  }
+
+  const quitarFila = (id: string) =>
+    setFilas((fs) =>
+      fs.length === 1
+        ? [{ id: nuevoId(), texto: '', tachada: false }]
+        : fs.filter((f) => f.id !== id)
+    )
+
+  const agregarFila = () => {
+    const nueva: Fila = { id: nuevoId(), texto: '', tachada: false }
+    setFilas((fs) => [...fs, nueva])
+    setFocoId(nueva.id)
+  }
 
   // Guardar al cerrar (por si quedó algo en el rebote)
   const cerrar = () => {
@@ -383,13 +496,71 @@ function EditorNota({
             placeholder="Título (opcional)"
             className="w-full bg-transparent text-2xl font-bold text-tinta placeholder:text-tinta/30 focus:outline-none mb-3"
           />
-          <textarea
-            value={contenido}
-            onChange={(e) => setContenido(e.target.value)}
-            autoFocus={!nota.id}
-            placeholder="Escribe aquí tu nota..."
-            className="w-full bg-transparent text-lg leading-relaxed text-tinta/90 placeholder:text-tinta/30 focus:outline-none resize-none min-h-[45vh]"
-          />
+          {/* Cuerpo: una fila por línea, cada una se puede tachar */}
+          <div className="space-y-1">
+            {filas.map((f) => (
+              <div key={f.id} className="flex items-start gap-2.5 group/fila">
+                <button
+                  onClick={() => toggleTachada(f.id)}
+                  className={`mt-1.5 w-8 h-8 shrink-0 rounded-lg border-2 flex items-center justify-center text-sm font-bold transition ${
+                    f.tachada
+                      ? 'bg-tinta border-tinta text-marfil'
+                      : 'border-tinta/25 text-transparent hover:border-tinta/60 hover:text-tinta/25'
+                  }`}
+                  title={f.tachada ? 'Destachar esta línea' : 'Tachar esta línea'}
+                  aria-label={f.tachada ? 'Destachar esta línea' : 'Tachar esta línea'}
+                >
+                  ✓
+                </button>
+
+                <textarea
+                  ref={(el) => {
+                    refs.current[f.id] = el
+                  }}
+                  value={f.texto}
+                  onChange={(e) => setTextoFila(f.id, e.target.value)}
+                  onInput={(e) => autoAlto(e.currentTarget)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      filaNuevaTras(f.id)
+                    } else if (e.key === 'Backspace' && f.texto === '') {
+                      e.preventDefault()
+                      borrarFilaVacia(f.id)
+                    }
+                  }}
+                  rows={1}
+                  placeholder="Escribe aquí..."
+                  className={`flex-1 min-w-0 bg-transparent py-1.5 text-lg leading-relaxed resize-none overflow-hidden focus:outline-none placeholder:text-tinta/25 ${
+                    f.tachada ? 'line-through text-tinta/40' : 'text-tinta/90'
+                  }`}
+                />
+
+                <button
+                  onClick={() => quitarFila(f.id)}
+                  className="mt-2 shrink-0 opacity-0 group-hover/fila:opacity-100 focus:opacity-100 text-tinta/30 hover:text-rosa transition text-sm px-1"
+                  title="Quitar esta línea"
+                  aria-label="Quitar esta línea"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={agregarFila}
+            className="mt-3 flex items-center gap-2.5 text-sm font-semibold text-tinta/50 hover:text-tinta transition"
+          >
+            <span className="w-8 h-8 rounded-lg border-2 border-dashed border-tinta/25 flex items-center justify-center text-base">
+              +
+            </span>
+            Agregar línea
+          </button>
+
+          <p className="text-xs text-tinta/40 mt-4">
+            Toca el cuadrito para tachar una línea · Enter crea la siguiente
+          </p>
         </div>
 
         {/* Pie: colores + eliminar */}
