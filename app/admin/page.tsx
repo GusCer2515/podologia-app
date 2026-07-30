@@ -78,6 +78,7 @@ export default function AdminAgendaPage() {
     rangeStart: number
     rangeEnd: number
     info: any
+    pasado: boolean
   } | null>(null)
   const [bookTime, setBookTime] = useState('')
   const [bookPatient, setBookPatient] = useState('')
@@ -93,6 +94,8 @@ export default function AdminAgendaPage() {
   const [creandoPaciente, setCreandoPaciente] = useState(false)
   // El admin confirma agendar sin tiempo de preparación
   const [aceptaAjustado, setAceptaAjustado] = useState(false)
+  // El admin confirma registrar una atención que YA ocurrió (respaldo)
+  const [aceptaPasado, setAceptaPasado] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<any>(null)
 
   const todayIso = todayLocalStr()
@@ -170,25 +173,38 @@ export default function AdminAgendaPage() {
   // ofrecen los demás horarios libres de la jornada.
   // estado 'ok' = cabe con preparación · 'ajustado' = la atención cabe pero
   // queda sin tiempo de preparación (solo el admin puede forzarlo)
-  const horasDia: { min: number; hhmm: string; enTramo: boolean; estado: 'ok' | 'ajustado' }[] = []
+  const horasDia: {
+    min: number
+    hhmm: string
+    enTramo: boolean
+    estado: 'ok' | 'ajustado'
+    pasado: boolean
+  }[] = []
   if (bookSlot) {
     const ahora = new Date()
     const nowMin = ahora.getHours() * 60 + ahora.getMinutes()
     const esHoy = bookSlot.date === todayIso
+    const esDiaPasado = bookSlot.date < todayIso
     for (const b of bookSlot.info.bloques) {
       for (let t = b.start; t + duracionSel <= b.end; t += PASO_MIN) {
-        if (esHoy && t <= nowMin) continue
+        const esPasadoT = esDiaPasado || (esHoy && t <= nowMin)
+        // En modo normal se ocultan las horas pasadas; en modo respaldo
+        // se muestran SOLO las pasadas (la atención ya ocurrió)
+        if (!bookSlot.pasado && esPasadoT) continue
+        if (bookSlot.pasado && !esPasadoT) continue
         const fin = t + duracionSel
         // La atención en sí NO puede pisar otra cita
         if (bookSlot.info.busyRaw.some((x: any) => overlaps(t, fin, x.start, x.end))) continue
-        const chocaPrep = bookSlot.info.busy.some((x: any) =>
-          overlaps(t, fin + prepSel, x.start, x.end)
-        )
+        // El tiempo de preparación no aplica a una atención ya ocurrida
+        const chocaPrep =
+          !esPasadoT &&
+          bookSlot.info.busy.some((x: any) => overlaps(t, fin + prepSel, x.start, x.end))
         horasDia.push({
           min: t,
           hhmm: toHHMM(t),
           enTramo: t >= bookSlot.rangeStart && fin <= bookSlot.rangeEnd,
           estado: chocaPrep ? 'ajustado' : 'ok',
+          pasado: esPasadoT,
         })
       }
     }
@@ -198,11 +214,13 @@ export default function AdminAgendaPage() {
   const cabeEnTramo = horasDia.some((h) => h.enTramo && h.estado === 'ok')
   const horaSel = horasDia.find((h) => h.hhmm === bookTime)
   const esAjustado = horaSel?.estado === 'ajustado'
+  const esPasado = !!horaSel?.pasado
 
   // Al cambiar el servicio, elegir la mejor hora disponible (prefiere las 'ok')
   useEffect(() => {
     if (!bookSlot) return
     setAceptaAjustado(false)
+    setAceptaPasado(false)
     if (horasDia.length === 0) {
       setBookTime('')
     } else if (!horasPosibles.includes(bookTime)) {
@@ -226,6 +244,8 @@ export default function AdminAgendaPage() {
     setBookServiceId('')
     setShowNuevoPaciente(false)
     setNuevoPaciente({ ...PACIENTE_VACIO })
+    setAceptaAjustado(false)
+    setAceptaPasado(false)
   }
 
   // Abre el formulario de alta rápida aprovechando lo ya escrito en el
@@ -326,17 +346,20 @@ export default function AdminAgendaPage() {
     }
     // Si solo choca la preparación, el admin debe confirmarlo
     const chocaPrep = info.busy.some((b: any) => overlaps(startMin, endConPrep, b.start, b.end))
-    if (chocaPrep && !aceptaAjustado) {
+    if (esPasado) {
+      // Atención que ya ocurrió: confirmación explícita, sin correo
+      if (!aceptaPasado) {
+        showToast('Marca la casilla para registrar la atención que ya pasó', 'error')
+        return
+      }
+    } else if (chocaPrep && !aceptaAjustado) {
       showToast('Marca la casilla para agendar sin tiempo de preparación', 'error')
       return
     }
 
     setSavingBook(true)
     try {
-      const nuevoId = await adminCreateAppointment(
-        bookPatient,
-        `${bookSlot.date}T${bookTime}:00`,
-        bookNotes || 'Agendada por administración',
+      const base =
         bookTipo === 'manicura'
           ? {
               tipo: 'manicura',
@@ -345,11 +368,19 @@ export default function AdminAgendaPage() {
               duration_minutes: duracionSel,
             }
           : { tipo: 'podologia', duration_minutes: 60 }
+      // La atención pasada se guarda ya COMPLETADA (cuenta para la contabilidad)
+      const extra = esPasado ? { ...base, status: 'completed' } : base
+
+      const nuevoId = await adminCreateAppointment(
+        bookPatient,
+        `${bookSlot.date}T${bookTime}:00`,
+        bookNotes || (esPasado ? 'Atención registrada después (respaldo)' : 'Agendada por administración'),
+        extra
       )
 
-      // Correo de confirmación al paciente (no en sobrecupos: son casos
-      // acordados aparte, y no se envía el aviso interno a la clínica)
-      if (nuevoId && !chocaPrep) {
+      // Correo de confirmación al paciente. NUNCA en atenciones pasadas (ya
+      // ocurrieron) ni en sobrecupos (casos acordados aparte).
+      if (nuevoId && !esPasado && !chocaPrep) {
         fetch('/api/notify-booking', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -362,7 +393,13 @@ export default function AdminAgendaPage() {
         }).catch(() => {})
       }
 
-      showToast(bookTipo === 'manicura' ? 'Manicura agendada 💅' : 'Cita agendada')
+      showToast(
+        esPasado
+          ? '✅ Atención pasada registrada'
+          : bookTipo === 'manicura'
+          ? 'Manicura agendada 💅'
+          : 'Cita agendada'
+      )
       cerrarModal()
       loadWeek(weekStart)
     } catch (err: any) {
@@ -411,23 +448,44 @@ export default function AdminAgendaPage() {
     const now = new Date()
     const nowMin = now.getHours() * 60 + now.getMinutes()
     const isToday = iso === todayIso
+    const isPast = iso < todayIso
 
-    // RANGOS libres continuos dentro de cada bloque (en vez de mil casillas)
-    const freeRanges: { start: number; end: number }[] = []
+    // TODOS los rangos libres del día (sin recortar por la hora actual)
+    const allFree: { start: number; end: number }[] = []
     if (bloques.length > 0 && !blocked) {
       for (const bloque of bloques) {
         let cursor = bloque.start
-        if (isToday) cursor = Math.max(cursor, Math.ceil(nowMin / PASO_MIN) * PASO_MIN)
         for (const b of busy) {
           if (b.end <= cursor) continue
           if (b.start >= bloque.end) break
           if (b.start > cursor) {
             const fin = Math.min(b.start, bloque.end)
-            if (fin - cursor >= PASO_MIN) freeRanges.push({ start: cursor, end: fin })
+            if (fin - cursor >= PASO_MIN) allFree.push({ start: cursor, end: fin })
           }
           cursor = Math.max(cursor, b.end)
         }
-        if (bloque.end - cursor >= PASO_MIN) freeRanges.push({ start: cursor, end: bloque.end })
+        if (bloque.end - cursor >= PASO_MIN) allFree.push({ start: cursor, end: bloque.end })
+      }
+    }
+
+    // Se separan en FUTUROS (agendables normal) y PASADOS (registro de
+    // respaldo: atenciones que ya ocurrieron y no se alcanzaron a agendar)
+    const freeRanges: { start: number; end: number }[] = []
+    const pastRanges: { start: number; end: number }[] = []
+    for (const r of allFree) {
+      if (isPast) {
+        pastRanges.push(r)
+      } else if (!isToday) {
+        freeRanges.push(r)
+      } else if (r.end <= nowMin) {
+        pastRanges.push(r)
+      } else if (r.start >= nowMin) {
+        freeRanges.push(r)
+      } else {
+        // Hoy: el rango cruza la hora actual, se parte en dos
+        if (nowMin - r.start >= PASO_MIN) pastRanges.push({ start: r.start, end: nowMin })
+        const fstart = Math.ceil(nowMin / PASO_MIN) * PASO_MIN
+        if (r.end - fstart >= PASO_MIN) freeRanges.push({ start: fstart, end: r.end })
       }
     }
 
@@ -438,6 +496,7 @@ export default function AdminAgendaPage() {
       date,
       iso,
       isToday,
+      isPast,
       blocked,
       blockNote: blockedMap.get(iso),
       bloques,
@@ -445,6 +504,7 @@ export default function AdminAgendaPage() {
       dayAppts,
       activas,
       freeRanges,
+      pastRanges,
       freeMin,
     }
   })
@@ -535,12 +595,18 @@ export default function AdminAgendaPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3">
           {days.map((day) => {
-            const isPast = day.iso < todayIso
-            const isDimmed = isPast || (day.bloques.length === 0 && !day.blocked)
+            const isPast = day.isPast
+            // Días sin atención se apagan del todo; los pasados quedan tenues
+            // pero legibles para poder registrar atenciones de respaldo
+            const noAtiende = day.bloques.length === 0 && !day.blocked
             const pendientes = day.dayAppts.filter((a) => a.status === 'scheduled').length
 
-            // Línea de tiempo: citas activas + rangos libres, en orden
-            const filas = [
+            // Línea de tiempo: citas activas + rangos libres (futuros y
+            // pasados), en orden
+            const filas: (
+              | { min: number; kind: 'appt'; apt: any }
+              | { min: number; kind: 'free'; range: { start: number; end: number }; pasado: boolean }
+            )[] = [
               ...day.dayAppts
                 .filter((a) => a.status !== 'cancelled')
                 .map((a) => ({
@@ -548,13 +614,16 @@ export default function AdminAgendaPage() {
                   kind: 'appt' as const,
                   apt: a,
                 })),
-              ...day.freeRanges.map((r) => ({ min: r.start, kind: 'free' as const, range: r })),
+              ...day.freeRanges.map((r) => ({ min: r.start, kind: 'free' as const, range: r, pasado: false })),
+              ...day.pastRanges.map((r) => ({ min: r.start, kind: 'free' as const, range: r, pasado: true })),
             ].sort((a, b) => a.min - b.min)
 
             return (
               <div
                 key={day.iso}
-                className={`bg-marfil rounded-2xl border shadow-sm min-h-32 ${isDimmed ? 'opacity-50 grayscale' : ''} ${
+                className={`bg-marfil rounded-2xl border shadow-sm min-h-32 ${
+                  noAtiende ? 'opacity-50 grayscale' : isPast ? 'opacity-75' : ''
+                } ${
                   day.blocked ? 'border-rosa/50' : day.isToday ? 'border-arena ring-2 ring-tinta' : 'border-arena'
                 }`}
               >
@@ -595,24 +664,38 @@ export default function AdminAgendaPage() {
                       {filas.map((row) => {
                         if (row.kind === 'free') {
                           const largo = row.range.end - row.range.start
+                          const pasado = row.pasado
                           return (
                             <button
-                              key={`free-${row.range.start}`}
+                              key={`free-${pasado ? 'p' : 'f'}-${row.range.start}`}
                               onClick={() =>
                                 setBookSlot({
                                   date: day.iso,
                                   rangeStart: row.range.start,
                                   rangeEnd: row.range.end,
                                   info: day.info,
+                                  pasado,
                                 })
                               }
-                              className="w-full border border-dashed border-salvia/50 bg-salvia/5 rounded-lg px-2 py-2 text-xs text-left hover:bg-salvia/15 hover:border-salvia transition"
-                              title="Agendar dentro de este tramo"
+                              className={`w-full border border-dashed rounded-lg px-2 py-2 text-xs text-left transition ${
+                                pasado
+                                  ? 'border-gray-300 bg-gray-100/70 hover:bg-gray-200/70 hover:border-gray-400'
+                                  : 'border-salvia/50 bg-salvia/5 hover:bg-salvia/15 hover:border-salvia'
+                              }`}
+                              title={
+                                pasado
+                                  ? 'Registrar una atención que ya ocurrió (respaldo, sin correo)'
+                                  : 'Agendar dentro de este tramo'
+                              }
                             >
-                              <span className="block font-bold text-salvia">
+                              <span className={`block font-bold ${pasado ? 'text-gray-500' : 'text-salvia'}`}>
                                 {toHHMM(row.range.start)} – {toHHMM(row.range.end)}
                               </span>
-                              <span className="block text-gray-500">{dur(largo)} libre · + agendar</span>
+                              <span className="block text-gray-500">
+                                {pasado
+                                  ? `⏱ ${dur(largo)} · registrar atención`
+                                  : `${dur(largo)} libre · + agendar`}
+                              </span>
                             </button>
                           )
                         }
@@ -689,14 +772,29 @@ export default function AdminAgendaPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/50 backdrop-blur-sm p-4">
           <div className="bg-marfil rounded-3xl shadow-2xl border border-arena max-w-2xl w-full p-7 animate-fade-up max-h-[90vh] overflow-y-auto">
             <h2 className="font-display text-2xl text-tinta font-medium">
-              Agendar el{' '}
+              {bookSlot.pasado ? 'Registrar atención del' : 'Agendar el'}{' '}
               <span className="italic">
                 {new Date(bookSlot.date + 'T00:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
               </span>
             </h2>
             <p className="text-sm text-gray-500">
-              Tramo libre: <strong className="text-salvia">{toHHMM(bookSlot.rangeStart)} – {toHHMM(bookSlot.rangeEnd)}</strong>
+              Tramo {bookSlot.pasado ? 'pasado' : 'libre'}:{' '}
+              <strong className={bookSlot.pasado ? 'text-gray-600' : 'text-salvia'}>
+                {toHHMM(bookSlot.rangeStart)} – {toHHMM(bookSlot.rangeEnd)}
+              </strong>
             </p>
+
+            {/* Aviso claro: se está registrando algo que YA ocurrió */}
+            {bookSlot.pasado && (
+              <div className="mt-3 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+                <p className="text-sm font-bold text-amber-900">⏱ Estás registrando una atención que ya pasó</p>
+                <p className="text-xs text-amber-800 mt-1">
+                  Sirve para dejar respaldo de una atención ya realizada (contabilidad de
+                  pacientes). Quedará marcada como <strong>completada</strong> y{' '}
+                  <strong>no se enviará ningún correo</strong>, porque la cita ya ocurrió.
+                </p>
+              </div>
+            )}
 
             <div className="flex gap-2 mt-4">
               <button onClick={() => setBookTipo('podologia')} className={`flex-1 py-2 rounded-full text-sm font-bold border transition ${bookTipo === 'podologia' ? 'bg-tinta text-marfil border-tinta' : 'bg-white text-tinta-suave border-arena hover:border-tinta-suave'}`}>🦶 Podología (1h)</button>
@@ -716,7 +814,9 @@ export default function AdminAgendaPage() {
 
             {/* Hora de inicio: todas las del día donde cabe el servicio */}
             <p className="text-xs font-bold uppercase tracking-wide text-tinta-suave mt-4 mb-2">
-              Hora de inicio ({dur(duracionSel)} + {prepSel} min de preparación)
+              {bookSlot.pasado
+                ? `Hora en que se atendió (${dur(duracionSel)})`
+                : `Hora de inicio (${dur(duracionSel)} + ${prepSel} min de preparación)`}
             </p>
             {horasDia.length === 0 ? (
               <p className="text-sm text-orange-600 bg-orange-50 p-3 rounded-xl">
@@ -763,7 +863,7 @@ export default function AdminAgendaPage() {
                 </div>
                 <p className="text-[11px] text-gray-400 mt-1.5">
                   {bookTime && `Terminaría a las ${toHHMM(toMin(bookTime) + duracionSel)}. `}
-                  🟢 dentro del tramo · 🟡 cabe justo, sin preparación
+                  {!bookSlot.pasado && '🟢 dentro del tramo · 🟡 cabe justo, sin preparación'}
                 </p>
 
                 {/* Confirmación para agendar sin tiempo de preparación */}
@@ -780,6 +880,26 @@ export default function AdminAgendaPage() {
                       atención cabe justo hasta{' '}
                       {toHHMM(toMin(bookTime) + duracionSel)}, pero quedarás sin los {prepSel} min
                       para limpiar antes de la siguiente cita. Confirmo que quiero agendarla igual.
+                    </span>
+                  </label>
+                )}
+
+                {/* Confirmación para registrar una atención que ya ocurrió */}
+                {esPasado && (
+                  <label className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={aceptaPasado}
+                      onChange={(e) => setAceptaPasado(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 accent-amber-600"
+                    />
+                    <span className="text-xs text-amber-900">
+                      <strong>Confirmo que esta atención ya se realizó.</strong> Se registrará el{' '}
+                      {new Date(bookSlot.date + 'T00:00:00').toLocaleDateString('es-CL', {
+                        day: 'numeric',
+                        month: 'long',
+                      })}{' '}
+                      a las {bookTime} como completada, solo para respaldo. No se enviará correo.
                     </span>
                   </label>
                 )}
@@ -901,16 +1021,28 @@ export default function AdminAgendaPage() {
 
             <button
               onClick={confirmBook}
-              disabled={savingBook || !bookPatient || !bookTime || (esAjustado && !aceptaAjustado)}
-              className="mt-4 w-full bg-tinta text-marfil py-3 rounded-full font-bold hover:bg-tinta-suave transition disabled:opacity-50"
+              disabled={
+                savingBook ||
+                !bookPatient ||
+                !bookTime ||
+                (esAjustado && !aceptaAjustado) ||
+                (esPasado && !aceptaPasado)
+              }
+              className={`mt-4 w-full text-marfil py-3 rounded-full font-bold transition disabled:opacity-50 ${
+                esPasado ? 'bg-amber-600 hover:bg-amber-700' : 'bg-tinta hover:bg-tinta-suave'
+              }`}
             >
               {savingBook
-                ? 'Agendando...'
+                ? 'Guardando...'
+                : esPasado && !aceptaPasado
+                ? 'Marca la casilla para confirmar'
                 : esAjustado && !aceptaAjustado
                 ? 'Marca la casilla para continuar'
-                : bookTime
-                ? `✔ Confirmar a las ${bookTime}`
-                : 'Selecciona la hora'}
+                : !bookTime
+                ? 'Selecciona la hora'
+                : esPasado
+                ? `✔ Registrar atención de las ${bookTime}`
+                : `✔ Confirmar a las ${bookTime}`}
             </button>
             <button onClick={cerrarModal} className="mt-2 w-full py-2.5 rounded-full font-bold text-tinta border-2 border-tinta/15 hover:border-tinta/40 transition">Cancelar</button>
           </div>

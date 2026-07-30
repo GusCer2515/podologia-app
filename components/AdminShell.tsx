@@ -9,14 +9,14 @@ import { Toaster } from '@/components/toast'
 import NotificationBell from '@/components/NotificationBell'
 
 const NAV_ITEMS = [
-  { href: '/admin', label: '📅 Agenda' },
-  { href: '/admin/patients', label: '👥 Pacientes' },
-  { href: '/admin/notes', label: '📝 Notas' },
-  { href: '/admin/nails', label: '💅 Nails' },
-  { href: '/admin/finance', label: '💰 Finanzas' },
-  { href: '/admin/content', label: '🖼 Contenido' },
-  { href: '/admin/social', label: '📱 Redes' },
-  { href: '/admin/settings', label: '⚙️ Configuración' },
+  { href: '/admin', icon: '📅', label: 'Agenda' },
+  { href: '/admin/patients', icon: '👥', label: 'Pacientes' },
+  { href: '/admin/notes', icon: '📝', label: 'Notas' },
+  { href: '/admin/nails', icon: '💅', label: 'Nails' },
+  { href: '/admin/finance', icon: '💰', label: 'Finanzas' },
+  { href: '/admin/content', icon: '🖼', label: 'Contenido' },
+  { href: '/admin/social', icon: '📱', label: 'Redes' },
+  { href: '/admin/settings', icon: '⚙️', label: 'Configuración' },
 ]
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
@@ -27,6 +27,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const [password, setPassword] = useState('')
   const [loggingIn, setLoggingIn] = useState(false)
   const [loginError, setLoginError] = useState('')
+  // Sidebar plegable: en tablet libera mucho espacio, sobre todo en la agenda
+  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
     getSession().then((session) => {
@@ -34,6 +36,18 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       setChecking(false)
     })
   }, [])
+
+  useEffect(() => {
+    setCollapsed(localStorage.getItem('admin_sidebar_collapsed') === '1')
+  }, [])
+
+  const toggleSidebar = () => {
+    setCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem('admin_sidebar_collapsed', next ? '1' : '0')
+      return next
+    })
+  }
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -126,15 +140,26 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen bg-crema flex">
-      {/* Sidebar: fijo a la pantalla — menú y cierre de sesión siempre visibles */}
-      <aside className="w-60 bg-marfil border-r border-arena flex flex-col shrink-0 sticky top-0 h-screen">
-        <div className="p-5 border-b border-arena">
-          <h1 className="font-display italic text-2xl text-tinta font-semibold">
-            Vida de Colores
-          </h1>
-          <p className="text-[11px] tracking-[0.2em] uppercase text-rosa font-bold mt-1">
-            Panel administrativo
-          </p>
+      {/* Sidebar: fijo a la pantalla — menú y cierre de sesión siempre visibles.
+          Plegable para dar más espacio al contenido (útil en tablet). */}
+      <aside
+        className={`bg-marfil border-r border-arena flex flex-col shrink-0 sticky top-0 h-screen transition-all duration-200 ${
+          collapsed ? 'w-[68px]' : 'w-60'
+        }`}
+      >
+        <div className={`border-b border-arena ${collapsed ? 'p-3 text-center' : 'p-5'}`}>
+          {collapsed ? (
+            <p className="font-display italic text-2xl text-tinta font-semibold">VC</p>
+          ) : (
+            <>
+              <h1 className="font-display italic text-2xl text-tinta font-semibold">
+                Vida de Colores
+              </h1>
+              <p className="text-[11px] tracking-[0.2em] uppercase text-rosa font-bold mt-1">
+                Panel administrativo
+              </p>
+            </>
+          )}
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -147,13 +172,17 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block px-4 py-2.5 rounded-full font-semibold transition ${
+                title={item.label}
+                className={`flex items-center rounded-full font-semibold transition ${
+                  collapsed ? 'justify-center px-0 py-2.5 text-xl' : 'gap-2 px-4 py-2.5'
+                } ${
                   active
                     ? 'bg-tinta text-marfil'
                     : 'text-tinta-suave hover:bg-rosa-palo/40 hover:text-tinta'
                 }`}
               >
-                {item.label}
+                <span className={collapsed ? '' : 'text-lg leading-none'}>{item.icon}</span>
+                {!collapsed && <span>{item.label}</span>}
               </Link>
             )
           })}
@@ -162,23 +191,37 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <div className="p-3 border-t border-arena">
           <Link
             href="/"
-            className="block px-4 py-2 text-sm text-tinta-suave hover:bg-arena/50 rounded-full mb-1 transition"
+            title="Ver sitio público"
+            className={`flex items-center text-sm text-tinta-suave hover:bg-arena/50 rounded-full mb-1 transition ${
+              collapsed ? 'justify-center py-2 text-lg' : 'gap-2 px-4 py-2'
+            }`}
           >
-            🌐 Ver sitio público
+            🌐 {!collapsed && <span>Ver sitio público</span>}
           </Link>
           <button
             onClick={handleLogout}
-            className="w-full text-left px-4 py-2 text-sm text-rosa font-semibold hover:bg-rosa-palo/40 rounded-full transition"
+            title="Cerrar sesión"
+            className={`flex items-center w-full text-sm text-rosa font-semibold hover:bg-rosa-palo/40 rounded-full transition ${
+              collapsed ? 'justify-center py-2 text-lg' : 'gap-2 px-4 py-2 text-left'
+            }`}
           >
-            🚪 Cerrar sesión
+            🚪 {!collapsed && <span>Cerrar sesión</span>}
           </button>
         </div>
       </aside>
 
       {/* Contenido */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Barra superior con la campana de notificaciones */}
-        <div className="sticky top-0 z-30 flex justify-end px-6 py-2.5 bg-crema/80 backdrop-blur border-b border-arena/50">
+        {/* Barra superior: botón para plegar/desplegar + campana */}
+        <div className="sticky top-0 z-30 flex items-center justify-between px-4 py-2.5 bg-crema/80 backdrop-blur border-b border-arena/50">
+          <button
+            onClick={toggleSidebar}
+            title={collapsed ? 'Expandir menú' : 'Plegar menú'}
+            aria-label={collapsed ? 'Expandir menú' : 'Plegar menú'}
+            className="w-10 h-10 rounded-full border border-arena bg-marfil text-tinta text-lg hover:bg-arena/50 transition flex items-center justify-center"
+          >
+            {collapsed ? '»' : '«'}
+          </button>
           <NotificationBell />
         </div>
         <main className="p-6">{children}</main>

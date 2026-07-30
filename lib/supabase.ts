@@ -609,7 +609,13 @@ export async function adminCreateAppointment(
   patientId: string,
   datetime: string,
   notes?: string,
-  extra?: { tipo?: string; nail_service_id?: string | null; valor?: number | null; duration_minutes?: number }
+  extra?: {
+    tipo?: string
+    nail_service_id?: string | null
+    valor?: number | null
+    duration_minutes?: number
+    status?: string
+  }
 ) {
   const { data, error } = await supabase
     .from('appointments')
