@@ -22,6 +22,7 @@ import {
   type Buffers,
 } from '@/lib/slots'
 import { initials, colorFor } from '@/lib/avatar'
+import { getFeriado } from '@/lib/feriados'
 import { showToast } from '@/components/toast'
 import CorreosPendientes from '@/components/CorreosPendientes'
 
@@ -529,6 +530,7 @@ export default function AdminAgendaPage() {
       pastRanges,
       partialBlocks,
       freeMin,
+      feriado: getFeriado(iso),
     }
   })
 
@@ -649,16 +651,38 @@ export default function AdminAgendaPage() {
                 className={`bg-marfil rounded-2xl border shadow-sm min-h-32 ${
                   noAtiende ? 'opacity-50 grayscale' : isPast ? 'opacity-75' : ''
                 } ${
-                  day.blocked ? 'border-rosa/50' : day.isToday ? 'border-arena ring-2 ring-tinta' : 'border-arena'
+                  day.blocked
+                    ? 'border-rosa/50'
+                    : day.isToday
+                    ? 'border-arena ring-2 ring-tinta'
+                    : day.feriado
+                    ? 'border-amber-300 ring-2 ring-amber-300'
+                    : 'border-arena'
                 }`}
               >
                 <div
                   className={`sticky top-16 z-10 px-3 py-2 border-b border-arena/60 text-center rounded-t-2xl shadow-sm ${
-                    day.blocked ? 'bg-rosa text-marfil' : day.isToday ? 'bg-tinta text-marfil' : 'bg-arena text-tinta'
+                    day.blocked
+                      ? 'bg-rosa text-marfil'
+                      : day.isToday
+                      ? 'bg-tinta text-marfil'
+                      : day.feriado
+                      ? 'bg-amber-100 text-amber-900'
+                      : 'bg-arena text-tinta'
                   }`}
                 >
                   <p className={`text-xs font-semibold uppercase ${isPast ? 'line-through' : ''}`}>{day.name}</p>
                   <p className={`text-sm font-bold ${isPast ? 'line-through' : ''}`}>{fmtShort(day.date)}</p>
+                  {day.feriado && (
+                    <span
+                      className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        day.isToday || day.blocked ? 'bg-marfil/25 text-marfil' : 'bg-amber-200 text-amber-900'
+                      }`}
+                      title={day.feriado}
+                    >
+                      🇨🇱 Feriado
+                    </span>
+                  )}
                   {day.bloques.length > 0 && !day.blocked && (
                     <p className="text-[10px] opacity-80 mt-0.5">
                       {day.bloques.map((b) => `${toHHMM(b.start)}–${toHHMM(b.end)}`).join(' · ')}
@@ -672,6 +696,18 @@ export default function AdminAgendaPage() {
                 </div>
 
                 <div className="p-2 space-y-1.5">
+                  {day.feriado && (
+                    <div className="bg-amber-50 border border-amber-300 rounded-lg p-2 text-xs">
+                      <p className="font-bold text-amber-800">🇨🇱 Feriado en Chile</p>
+                      <p className="text-amber-900">{day.feriado}</p>
+                      {!day.blocked && (
+                        <p className="text-amber-700/80 mt-0.5">
+                          Si no atenderás, bloquéalo en ⚙️ Configuración.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {day.blocked && (
                     <div className="bg-rosa-palo/60 border border-rosa/40 rounded-lg p-2 text-xs">
                       <p className="font-bold text-rosa">🚫 Día bloqueado</p>
