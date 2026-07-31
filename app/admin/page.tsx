@@ -410,7 +410,11 @@ export default function AdminAgendaPage() {
     }
   }
 
-  const blockedMap = new Map(blockouts.map((b: any) => [String(b.blocked_date), b.notes]))
+  // Solo los bloqueos de DÍA COMPLETO (sin hora) marcan el día como bloqueado.
+  // Los que tienen hora son tramos parciales (se manejan aparte, por día).
+  const blockedMap = new Map(
+    blockouts.filter((b: any) => !b.start_time).map((b: any) => [String(b.blocked_date), b.notes])
+  )
 
   // ===== Construcción de cada día =====
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -427,21 +431,39 @@ export default function AdminAgendaPage() {
       (a) => String(a.appointment_date).substring(0, 10) === iso && a.status !== 'cancelled'
     )
 
-    // Cada cita ocupa su duración + preparación posterior
-    const busy = activas
-      .map((a) => {
+    // Tramos de horario bloqueados ese día (bloqueo parcial). Si el día
+    // está bloqueado por completo, no hace falta mostrarlos aparte.
+    const partialBlocks = blocked
+      ? []
+      : blockouts
+          .filter((b: any) => String(b.blocked_date) === iso && b.start_time)
+          .map((b: any) => ({
+            start: toMin(String(b.start_time).substring(0, 5)),
+            end: toMin(String(b.end_time).substring(0, 5)),
+            notes: (b.notes ?? null) as string | null,
+          }))
+          .sort((a: any, b: any) => a.start - b.start)
+    const blockBusy = partialBlocks.map((b: any) => ({ start: b.start, end: b.end }))
+
+    // Cada cita ocupa su duración + preparación posterior. Los tramos
+    // bloqueados también ocupan: no se puede agendar sobre ellos.
+    const busy = [
+      ...activas.map((a) => {
         const t = toMin(String(a.appointment_date).substring(11, 16))
         return { start: t, end: t + (a.duration_minutes || 60) + bufferDe(a.tipo, buffers) }
-      })
-      .sort((a, b) => a.start - b.start)
+      }),
+      ...blockBusy,
+    ].sort((a, b) => a.start - b.start)
 
-    // Ocupación REAL (sin preparación): permite al admin apretar una cita
-    const busyRaw = activas
-      .map((a) => {
+    // Ocupación REAL (sin preparación): permite al admin apretar una cita.
+    // Los tramos bloqueados sí son una barrera dura, van también aquí.
+    const busyRaw = [
+      ...activas.map((a) => {
         const t = toMin(String(a.appointment_date).substring(11, 16))
         return { start: t, end: t + (a.duration_minutes || 60) }
-      })
-      .sort((a, b) => a.start - b.start)
+      }),
+      ...blockBusy,
+    ].sort((a, b) => a.start - b.start)
 
     const info = { bloques, busy, busyRaw }
 
@@ -505,6 +527,7 @@ export default function AdminAgendaPage() {
       activas,
       freeRanges,
       pastRanges,
+      partialBlocks,
       freeMin,
     }
   })
@@ -606,6 +629,7 @@ export default function AdminAgendaPage() {
             const filas: (
               | { min: number; kind: 'appt'; apt: any }
               | { min: number; kind: 'free'; range: { start: number; end: number }; pasado: boolean }
+              | { min: number; kind: 'block'; block: { start: number; end: number; notes: string | null } }
             )[] = [
               ...day.dayAppts
                 .filter((a) => a.status !== 'cancelled')
@@ -616,6 +640,7 @@ export default function AdminAgendaPage() {
                 })),
               ...day.freeRanges.map((r) => ({ min: r.start, kind: 'free' as const, range: r, pasado: false })),
               ...day.pastRanges.map((r) => ({ min: r.start, kind: 'free' as const, range: r, pasado: true })),
+              ...day.partialBlocks.map((b) => ({ min: b.start, kind: 'block' as const, block: b })),
             ].sort((a, b) => a.min - b.min)
 
             return (
@@ -662,6 +687,20 @@ export default function AdminAgendaPage() {
                   ) : (
                     <>
                       {filas.map((row) => {
+                        if (row.kind === 'block') {
+                          return (
+                            <div
+                              key={`block-${row.block.start}`}
+                              className="border border-gray-300 bg-gray-100 rounded-lg px-2 py-2 text-xs"
+                              title="Tramo bloqueado (no se puede agendar)"
+                            >
+                              <p className="font-bold text-gray-600">
+                                🚫 Bloqueado {toHHMM(row.block.start)}–{toHHMM(row.block.end)}
+                              </p>
+                              {row.block.notes && <p className="text-gray-500">{row.block.notes}</p>}
+                            </div>
+                          )
+                        }
                         if (row.kind === 'free') {
                           const largo = row.range.end - row.range.start
                           const pasado = row.pasado

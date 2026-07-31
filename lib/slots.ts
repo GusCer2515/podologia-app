@@ -81,7 +81,10 @@ export async function getDayInfo(date: string): Promise<DayInfo> {
 
   const empty: DayInfo = { blocked: false, message: '', bloques: [], busy: [], buffers }
 
-  if ((blockouts ?? []).some((b: any) => b.blocked_date === date)) {
+  const bloqueosDia = (blockouts ?? []).filter((b: any) => b.blocked_date === date)
+
+  // Día COMPLETO bloqueado (feriado / vacaciones): sin horas de tramo
+  if (bloqueosDia.some((b: any) => !b.start_time)) {
     return { ...empty, blocked: true, message: '⛔ Ese día no hay atención (feriado o día bloqueado). Elige otra fecha.' }
   }
 
@@ -96,6 +99,17 @@ export async function getDayInfo(date: string): Promise<DayInfo> {
     const t = toMin(String(o.slot).substring(11, 16))
     return { start: t, end: t + (o.duration || 60) + bufferDe(o.tipo, buffers) }
   })
+
+  // Tramos bloqueados puntuales de ese día: se tratan como ocupados,
+  // así no se ofrecen esas horas pero el resto del día sigue disponible
+  for (const b of bloqueosDia) {
+    if (b.start_time && b.end_time) {
+      busy.push({
+        start: toMin(String(b.start_time).substring(0, 5)),
+        end: toMin(String(b.end_time).substring(0, 5)),
+      })
+    }
+  }
 
   return { blocked: false, message: '', bloques, busy, buffers }
 }

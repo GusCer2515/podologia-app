@@ -68,7 +68,9 @@ export default function DocumentsTab({ patient }: { patient: any }) {
     Promise.all([getAvailability(), getBlockouts()])
       .then(([avail, blocks]) => {
         setActiveDays((avail ?? []).map((a: any) => a.day_of_week))
-        setBlockedDates((blocks ?? []).map((b: any) => String(b.blocked_date)))
+        // Solo los bloqueos de día completo impiden elegir esa fecha
+        // (un tramo parcial de horas no bloquea el día para el próximo control)
+        setBlockedDates((blocks ?? []).filter((b: any) => !b.start_time).map((b: any) => String(b.blocked_date)))
       })
       .catch(console.error)
   }, [load])

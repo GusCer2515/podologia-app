@@ -62,6 +62,10 @@ export default function SettingsPage() {
   const [savingPrecio, setSavingPrecio] = useState(false)
   const [newBlockDate, setNewBlockDate] = useState('')
   const [newBlockNote, setNewBlockNote] = useState('')
+  // Bloquear el día completo, o solo un tramo de horas de ese día
+  const [newBlockMode, setNewBlockMode] = useState<'dia' | 'horario'>('dia')
+  const [newBlockStart, setNewBlockStart] = useState('09:00')
+  const [newBlockEnd, setNewBlockEnd] = useState('13:00')
   const [newConvenio, setNewConvenio] = useState('')
   const [newConvenioValor, setNewConvenioValor] = useState('25000')
   // Wizard de reagendamiento al bloquear un día con citas
@@ -243,26 +247,50 @@ export default function SettingsPage() {
       showToast('Selecciona la fecha a bloquear', 'error')
       return
     }
+    const porTramo = newBlockMode === 'horario'
+    if (porTramo && newBlockStart >= newBlockEnd) {
+      showToast('El tramo de horas está invertido (inicio debe ser menor que fin)', 'error')
+      return
+    }
     try {
-      await addBlockout({ blocked_date: newBlockDate, notes: newBlockNote || null })
-      showToast('Día bloqueado')
+      await addBlockout({
+        blocked_date: newBlockDate,
+        notes: newBlockNote || null,
+        start_time: porTramo ? newBlockStart : null,
+        end_time: porTramo ? newBlockEnd : null,
+      })
+      showToast(porTramo ? 'Tramo de horario bloqueado' : 'Día bloqueado')
 
-      // ¿Había citas agendadas ese día? → wizard de reagendamiento
+      // ¿Había citas agendadas que caen dentro del bloqueo? → wizard de reagendamiento
       const appts = await getAppointmentsBetween(
         `${newBlockDate}T00:00:00`,
         `${newBlockDate}T23:59:59`
       ).catch(() => [])
-      const activas = (appts ?? []).filter((a: any) => a.status === 'scheduled')
+      const toMinLocal = (hhmm: string) => {
+        const [h, m] = hhmm.split(':').map(Number)
+        return h * 60 + m
+      }
+      const bStart = porTramo ? toMinLocal(newBlockStart) : 0
+      const bEnd = porTramo ? toMinLocal(newBlockEnd) : 24 * 60
+      const activas = (appts ?? []).filter((a: any) => {
+        if (a.status !== 'scheduled') return false
+        const t = toMinLocal(String(a.appointment_date).substring(11, 16))
+        const fin = t + (a.duration_minutes || 60)
+        return t < bEnd && bStart < fin // se solapa con el bloqueo
+      })
       if (activas.length > 0) {
         setWizard({ date: newBlockDate, items: activas })
       }
 
       setNewBlockDate('')
       setNewBlockNote('')
+      setNewBlockMode('dia')
+      setNewBlockStart('09:00')
+      setNewBlockEnd('13:00')
       load()
     } catch (err) {
       console.error(err)
-      showToast('Error bloqueando el día', 'error')
+      showToast('Error creando el bloqueo', 'error')
     }
   }
 
@@ -594,10 +622,29 @@ export default function SettingsPage() {
 
       {/* ================= DÍAS BLOQUEADOS ================= */}
       <section className="bg-marfil rounded-2xl border border-arena shadow-sm p-6">
-        <h2 className="font-display text-2xl text-tinta font-semibold mb-1">🚫 Días bloqueados</h2>
+        <h2 className="font-display text-2xl text-tinta font-semibold mb-1">🚫 Días y horarios bloqueados</h2>
         <p className="text-sm text-gray-500 mb-5">
-          Feriados, vacaciones o días puntuales sin atención (aunque el día de semana esté activo).
+          Feriados, vacaciones o días sin atención. También puedes bloquear{' '}
+          <strong>solo un tramo de horas</strong> de un día (ej: bloquear la mañana y seguir
+          atendiendo en la tarde). Los bloqueos aplican en tu agenda y en la toma de horas del sitio.
         </p>
+
+        {/* Elegir: día completo o solo un tramo */}
+        <div className="flex gap-1 bg-arena/40 rounded-full p-1 w-fit mb-4">
+          {([['dia', '📅 Día completo'], ['horario', '🕐 Solo un tramo']] as const).map(
+            ([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setNewBlockMode(key)}
+                className={`px-4 py-1.5 rounded-full text-sm font-bold transition ${
+                  newBlockMode === key ? 'bg-rosa text-marfil' : 'text-tinta-suave hover:bg-rosa-palo/40'
+                }`}
+              >
+                {label}
+              </button>
+            )
+          )}
+        </div>
 
         <div className="flex flex-wrap items-end gap-3 mb-5">
           <label className="text-xs text-gray-500">
@@ -609,13 +656,35 @@ export default function SettingsPage() {
               className={`block mt-1 ${inputClass}`}
             />
           </label>
+
+          {newBlockMode === 'horario' && (
+            <label className="text-xs text-gray-500">
+              Tramo bloqueado
+              <div className="flex items-center gap-1 mt-1">
+                <input
+                  type="time"
+                  value={newBlockStart}
+                  onChange={(e) => setNewBlockStart(e.target.value)}
+                  className={inputClass}
+                />
+                <span className="text-gray-400 text-sm">a</span>
+                <input
+                  type="time"
+                  value={newBlockEnd}
+                  onChange={(e) => setNewBlockEnd(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            </label>
+          )}
+
           <label className="text-xs text-gray-500 flex-1 min-w-40">
             Motivo (opcional)
             <input
               type="text"
               value={newBlockNote}
               onChange={(e) => setNewBlockNote(e.target.value)}
-              placeholder="Ej: Feriado, vacaciones..."
+              placeholder={newBlockMode === 'horario' ? 'Ej: Reunión, trámite...' : 'Ej: Feriado, vacaciones...'}
               className={`block mt-1 w-full ${inputClass}`}
             />
           </label>
@@ -623,42 +692,62 @@ export default function SettingsPage() {
             onClick={handleAddBlockout}
             className="bg-rosa text-marfil px-6 py-2 rounded-full font-bold hover:opacity-90 transition"
           >
-            Bloquear día
+            {newBlockMode === 'horario' ? 'Bloquear tramo' : 'Bloquear día'}
           </button>
         </div>
 
         {blockouts.length === 0 ? (
-          <p className="text-sm text-gray-400">No hay días bloqueados</p>
+          <p className="text-sm text-gray-400">No hay días ni horarios bloqueados</p>
         ) : (
           <div className="space-y-1.5">
             {blockouts
               .slice()
-              .sort((a, b) => String(b.blocked_date).localeCompare(String(a.blocked_date)))
-              .map((b) => (
-                <div
-                  key={b.id}
-                  className="flex items-center justify-between px-4 py-2 rounded-xl bg-white border border-arena text-sm"
-                >
-                  <span>
-                    <strong className="text-tinta">
-                      {new Date(b.blocked_date + 'T00:00:00').toLocaleDateString('es-CL', {
-                        weekday: 'long',
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      })}
-                    </strong>
-                    {b.notes ? ` — ${b.notes}` : ''}
-                  </span>
-                  <button
-                    onClick={() => handleDeleteBlockout(b.id)}
-                    className="text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 transition"
-                    title="Eliminar bloqueo"
+              .sort(
+                (a, b) =>
+                  String(b.blocked_date).localeCompare(String(a.blocked_date)) ||
+                  String(a.start_time ?? '').localeCompare(String(b.start_time ?? ''))
+              )
+              .map((b) => {
+                const esTramo = !!b.start_time
+                const hhmm = (t: string) => String(t).substring(0, 5)
+                return (
+                  <div
+                    key={b.id}
+                    className="flex items-center justify-between px-4 py-2 rounded-xl bg-white border border-arena text-sm"
                   >
-                    🗑
-                  </button>
-                </div>
-              ))}
+                    <span className="flex flex-wrap items-center gap-x-2">
+                      <span
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          esTramo ? 'bg-amber-100 text-amber-700' : 'bg-rosa-palo/60 text-rosa'
+                        }`}
+                      >
+                        {esTramo ? 'Tramo' : 'Día'}
+                      </span>
+                      <strong className="text-tinta">
+                        {new Date(b.blocked_date + 'T00:00:00').toLocaleDateString('es-CL', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })}
+                      </strong>
+                      {esTramo && (
+                        <span className="text-amber-700 font-semibold">
+                          {hhmm(b.start_time)}–{hhmm(b.end_time)}
+                        </span>
+                      )}
+                      {b.notes ? <span className="text-gray-500">— {b.notes}</span> : null}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteBlockout(b.id)}
+                      className="text-rosa hover:bg-rosa-palo/50 rounded-full px-2 py-1 transition shrink-0"
+                      title="Eliminar bloqueo"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                )
+              })}
           </div>
         )}
       </section>
