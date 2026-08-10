@@ -24,7 +24,7 @@ const SERVICIOS = [
   },
   {
     icon: '🌡️',
-    title: 'Uñas encarnadas e involutas',
+    title: 'Uñas incarnadas e involutas',
     desc: 'Alivio del dolor y corrección profesional de uñas incarnadas.',
   },
   {
