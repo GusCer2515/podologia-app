@@ -1,11 +1,36 @@
 // Envío de correos con Brevo. SOLO servidor: la API key nunca llega al
 // navegador. Lo comparten las rutas de confirmación y de cancelación.
 
+// Versión en texto plano del mensaje. Los filtros de spam penalizan los
+// correos que solo llevan HTML, así que siempre va también la alternativa
+// de texto (es la misma información, sin etiquetas).
+function htmlATexto(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h1|h2|h3|li|tr)>/gi, '\n')
+    .replace(/<hr[^>]*>/gi, '\n---\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+    .split('\n')
+    .map((linea) => linea.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 export async function sendEmail(
   to: string,
   subject: string,
   html: string,
-  fromName: string
+  fromName: string,
+  // Correo real donde la clínica lee las respuestas: sin esto, contestar
+  // el aviso rebota (el dominio del remitente no recibe mensajes)
+  replyTo?: string
 ) {
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
@@ -17,8 +42,10 @@ export async function sendEmail(
     body: JSON.stringify({
       sender: { email: process.env.BREVO_FROM_EMAIL, name: fromName },
       to: [{ email: to }],
+      ...(emailValido(replyTo) ? { replyTo: { email: replyTo, name: fromName } } : {}),
       subject,
       htmlContent: html,
+      textContent: htmlATexto(html),
     }),
   })
   if (!res.ok) {

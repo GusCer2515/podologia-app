@@ -80,3 +80,61 @@ Agenda una hora de prueba desde el sitio y revisa que lleguen los 2 correos
 
 Para revisar el estado real de entrega (`delivered` / `deferred` / `blocked`):
 Brevo → **Statistics** → **Email** → o la pestaña de registros/logs transaccionales.
+
+---
+
+## Paso 5 — Los correos llegan a spam / no deseado
+
+Los correos **sí se entregan**, pero Gmail y Outlook los mandan a la carpeta de
+no deseados. Faltan dos registros DNS que el Paso 1 no incluía.
+
+### 5.1 SPF (falta — es la causa principal)
+
+Hoy el dominio **no tiene SPF**. El único TXT en la raíz es el `brevo-code`.
+Sin SPF, Outlook/Hotmail marca casi siempre como no deseado, y Gmail baja la
+reputación aunque el DKIM esté bien.
+
+En Vercel → Domains → `vidadecolorespodologia.cl` → **Add Record**:
+
+| Tipo | Name | Value |
+|------|------|-------|
+| TXT | *(dejar VACÍO)* | `v=spf1 include:spf.brevo.com mx ~all` |
+
+> El TXT del `brevo-code` **no se toca**: un dominio puede tener varios TXT en la
+> raíz, pero **solo uno** puede empezar con `v=spf1`. Si hubiera dos SPF, falla.
+
+### 5.2 MX (falta — el dominio no puede recibir correo)
+
+El dominio no tiene ningún registro MX, así que `contacto@vidadecolorespodologia.cl`
+no existe como buzón: si un paciente responde el correo, rebota. Los filtros de
+spam también penalizan que un dominio remitente no pueda recibir respuestas.
+
+Opción sin costo: crear un **reenvío** con ImprovMX (u otro servicio de forwarding)
+para que todo lo que llegue a `contacto@vidadecolorespodologia.cl` se reenvíe al
+Gmail de la clínica, y agregar en Vercel los MX que indique el servicio.
+
+Mientras tanto, el código ya envía la cabecera **Reply-To** apuntando al correo de
+la clínica (⚙️ Configuración → Datos del negocio), así las respuestas llegan igual.
+
+### 5.3 Lo que ya está bien (verificado)
+
+| Registro | Estado |
+|----------|--------|
+| DKIM `brevo1._domainkey` / `brevo2._domainkey` | ✅ |
+| DMARC `_dmarc` (`p=none`) | ✅ |
+| `brevo-code` en la raíz | ✅ |
+| CNAME de marca `mail`, `img.mail`, `r.mail` | ✅ |
+
+### 5.4 Mejoras aplicadas en el código
+
+- Cada correo se envía con **versión en texto plano** además del HTML
+  (los mensajes solo-HTML suman puntos de spam).
+- Se agrega **Reply-To** con el correo real de la clínica.
+- Se quitaron los **emojis del inicio del asunto** (`✅`, `📅`), que es donde más
+  pesan para los filtros. Dentro del cuerpo se mantienen.
+
+### 5.5 Cuando ya lleguen bien
+
+Subir el DMARC de `p=none` a `p=quarantine` refuerza la reputación del dominio.
+Hacerlo **solo después** de confirmar por una o dos semanas que todo entra a la
+bandeja principal.

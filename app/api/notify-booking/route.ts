@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     // 1. Correo al paciente
     await sendEmail(
       email,
-      `✅ Tu hora está reservada — ${info.brand}`,
+      `Tu hora está reservada — ${info.brand}`,
       emailBase(info, `
         <p style="font-size:16px">Hola <strong>${name}</strong> 👋</p>
         <p style="font-size:16px">Tu hora quedó <strong style="color:#33506e">reservada</strong>:</p>
@@ -86,7 +86,8 @@ export async function POST(req: Request) {
         <p style="font-size:14px;color:#666">Si necesitas cambiar o cancelar tu hora, contáctanos por WhatsApp al ${info.phone}.</p>
         <p style="font-size:16px">¡Te esperamos! 🌸</p>
       `),
-      info.brand
+      info.brand,
+      info.email
     )
 
     await marcarEnviado(appointmentId, 'confirmacion')
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
 
     await sendEmail(
       (info as any).notifyEmail?.trim() || info.email,
-      `📅 Nueva reserva: ${name} — ${date} ${time}`,
+      `Nueva reserva: ${name} — ${date} ${time}`,
       emailBase(info, `
         <p style="font-size:16px"><strong>Nueva hora reservada</strong></p>
         <div style="background:#f1e9de;border-radius:14px;padding:18px 22px;margin:18px 0;font-size:15px">
@@ -110,7 +111,8 @@ export async function POST(req: Request) {
         </div>
         <p style="font-size:14px;color:#666">Revisa el detalle en tu panel administrativo.</p>
       `),
-      info.brand
+      info.brand,
+      email
     )
 
     return NextResponse.json({ ok: true })

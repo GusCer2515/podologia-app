@@ -57,7 +57,8 @@ export async function POST(req: Request) {
         </p>
         <p style="font-size:16px">¡Esperamos verte pronto! 🌸</p>
       `),
-      info.brand
+      info.brand,
+      info.email
     )
 
     await marcarEnviado(appointmentId, 'cancelacion')
