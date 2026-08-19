@@ -38,8 +38,7 @@ const s = StyleSheet.create({
   etiqueta: { fontFamily: 'Helvetica-Bold' },
   firma: { marginTop: 16, lineHeight: 1.3, alignItems: 'center' },
   despedida: { alignSelf: 'flex-start', marginBottom: 2 },
-  firmaTexto: { textAlign: 'center' },
-  firmaImg: { width: 86, alignSelf: 'center', marginBottom: -5 },
+  firmaImg: { width: 120, alignSelf: 'center', marginTop: 4 },
   // Encabezado breve que se repite desde la segunda hoja
   encabezadoCont: {
     position: 'absolute',
@@ -242,14 +241,11 @@ export function ReferralDocument({
           </Text>
         )}
 
-        {/* Firma: centrada como en las recetas · nunca se parte entre hojas */}
+        {/* Firma: centrada como en las recetas · nunca se parte entre hojas.
+            El timbre ya trae nombre, RUT, profesión y ROL. */}
         <View style={s.firma} wrap={false}>
           <Text style={s.despedida}>Atentamente,</Text>
-          <Image src={`${origin}/pdf-assets/firma.png`} style={s.firmaImg} />
-          <Text style={[s.firmaTexto, s.etiqueta]}>{info.professional}</Text>
-          <Text style={s.firmaTexto}>Podóloga Clínica</Text>
-          <Text style={s.firmaTexto}>Rut: {info.rut}</Text>
-          <Text style={s.firmaTexto}>Contacto: {info.phone}</Text>
+          <Image src={`${origin}/pdf-assets/timbre-firma.png`} style={s.firmaImg} />
         </View>
 
         {/* Pie fijo: se repite igual en todas las hojas */}

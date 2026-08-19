@@ -59,15 +59,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
   },
-  footerName: {
-    fontSize: 12,
-    fontFamily: 'Helvetica-Bold',
-    textAlign: 'center',
-    marginBottom: 3,
-  },
-  footerRut: {
-    fontSize: 11,
-    textAlign: 'center',
+  timbre: {
+    width: 125,
+    alignSelf: 'center',
   },
   footerContact: {
     fontSize: 9,
@@ -129,16 +123,13 @@ function ClinicDocument({ data, origin, info }: { data: PdfDocumentData; origin:
 
         <View style={styles.spacer} />
 
-        {/* Pie: flores en las esquinas + firma sobre el nombre/rut */}
+        {/* Pie: flores en las esquinas + timbre firmado al centro.
+            El timbre ya trae el nombre, el RUT, la profesión y el ROL, así
+            que no se repiten debajo como texto. */}
         <View style={styles.footerBanner}>
           <Image style={styles.footerFlowers} src={`${origin}/pdf-assets/flores-pie.png`} />
           <View style={styles.footerOverlay}>
-            <Image
-              src={`${origin}/pdf-assets/firma.png`}
-              style={{ width: 120, alignSelf: 'center', marginBottom: -12 }}
-            />
-            <Text style={styles.footerName}>{info.professional}</Text>
-            <Text style={styles.footerRut}>Rut: {info.rut}</Text>
+            <Image src={`${origin}/pdf-assets/timbre-firma.png`} style={styles.timbre} />
           </View>
         </View>
 
