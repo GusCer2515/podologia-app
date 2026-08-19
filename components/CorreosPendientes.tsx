@@ -8,7 +8,10 @@ import { useEffect, useState, useCallback } from 'react'
 import { getPendingConfirmations } from '@/lib/supabase'
 import { showToast } from '@/components/toast'
 
-const emailValido = (e?: string) => !!e && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)
+// Mismo criterio que lib/email.ts: el correo interno rut@sincorreo.local
+// no es una casilla real, así que cuenta como "sin correo"
+const emailValido = (e?: string) =>
+  !!e && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) && !/@sincorreo\.local$/i.test(e)
 
 interface Pendiente {
   id: string

@@ -86,8 +86,7 @@ export async function POST(req: Request) {
         <p style="font-size:14px;color:#666">Si necesitas cambiar o cancelar tu hora, contáctanos por WhatsApp al ${info.phone}.</p>
         <p style="font-size:16px">¡Te esperamos! 🌸</p>
       `),
-      info.brand,
-      info.email
+      info.brand
     )
 
     await marcarEnviado(appointmentId, 'confirmacion')
@@ -111,8 +110,7 @@ export async function POST(req: Request) {
         </div>
         <p style="font-size:14px;color:#666">Revisa el detalle en tu panel administrativo.</p>
       `),
-      info.brand,
-      email
+      info.brand
     )
 
     return NextResponse.json({ ok: true })

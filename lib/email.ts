@@ -23,14 +23,16 @@ function htmlATexto(html: string): string {
     .trim()
 }
 
+// OJO con el Reply-To: apuntarlo a una casilla @gmail.com cuando el
+// remitente es el dominio propio dispara la regla FREEMAIL_FORGED_REPLYTO
+// (+2.5 puntos de spam, es el patrón clásico de suplantación) y mandaba
+// los avisos a "no deseados". No hace falta: el dominio ya recibe correo
+// (MX de ImprovMX), así que responder al remitente llega igual.
 export async function sendEmail(
   to: string,
   subject: string,
   html: string,
-  fromName: string,
-  // Correo real donde la clínica lee las respuestas: sin esto, contestar
-  // el aviso rebota (el dominio del remitente no recibe mensajes)
-  replyTo?: string
+  fromName: string
 ) {
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
@@ -42,7 +44,6 @@ export async function sendEmail(
     body: JSON.stringify({
       sender: { email: process.env.BREVO_FROM_EMAIL, name: fromName },
       to: [{ email: to }],
-      ...(emailValido(replyTo) ? { replyTo: { email: replyTo, name: fromName } } : {}),
       subject,
       htmlContent: html,
       textContent: htmlATexto(html),
@@ -125,4 +126,9 @@ export async function marcarEnviado(appointmentId: string, tipo: 'confirmacion' 
   }
 }
 
-export const emailValido = (e?: string) => !!e && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)
+// El panel genera un correo interno (rut@sincorreo.local) cuando el paciente
+// no lo tiene a mano: no es una casilla real. Enviarle igual sumaba rebotes
+// en Brevo ("Unable to find MX of domain"), y los rebotes bajan la reputación
+// del remitente, que es justo lo que decide si el resto entra a spam.
+export const emailValido = (e?: string) =>
+  !!e && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) && !/@sincorreo\.local$/i.test(e)

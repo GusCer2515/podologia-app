@@ -85,55 +85,72 @@ Brevo → **Statistics** → **Email** → o la pestaña de registros/logs trans
 
 ## Paso 5 — Los correos llegan a spam / no deseado
 
-Los correos **sí se entregan**, pero Gmail y Outlook los mandan a la carpeta de
-no deseados. Faltan dos registros DNS que el Paso 1 no incluía.
+Los correos **sí se entregan** (Brevo los marca `delivered`), pero Gmail y Outlook
+los mandaban a la carpeta de no deseados. Se corrigió en dos tandas.
 
-### 5.1 SPF (falta — es la causa principal)
+### 5.1 Primera tanda — 2026-08-13 (DNS)
 
-Hoy el dominio **no tiene SPF**. El único TXT en la raíz es el `brevo-code`.
-Sin SPF, Outlook/Hotmail marca casi siempre como no deseado, y Gmail baja la
-reputación aunque el DKIM esté bien.
+Al dominio le faltaban dos registros que el asistente de Brevo no incluye:
 
-En Vercel → Domains → `vidadecolorespodologia.cl` → **Add Record**:
+| Tipo | Name | Value | Para qué |
+|------|------|-------|----------|
+| TXT | *(vacío)* | `v=spf1 include:spf.brevo.com include:spf.improvmx.com mx ~all` | SPF |
+| MX | *(vacío)* | `mx1.improvmx.com` (10) y `mx2.improvmx.com` (20) | recibir respuestas |
 
-| Tipo | Name | Value |
-|------|------|-------|
-| TXT | *(dejar VACÍO)* | `v=spf1 include:spf.brevo.com mx ~all` |
+> Solo puede haber **un** TXT que empiece con `v=spf1`. El de Brevo y el de ImprovMX
+> van fusionados en el mismo registro (por eso los dos `include:`).
 
-> El TXT del `brevo-code` **no se toca**: un dominio puede tener varios TXT en la
-> raíz, pero **solo uno** puede empezar con `v=spf1`. Si hubiera dos SPF, falla.
+El buzón lo resuelve **ImprovMX** (gratis) con un catch-all
+`*@vidadecolorespodologia.cl` → Gmail de la clínica.
 
-### 5.2 MX (falta — el dominio no puede recibir correo)
+### 5.2 Segunda tanda — 2026-08-18 (el Reply-To era el problema)
 
-El dominio no tiene ningún registro MX, así que `contacto@vidadecolorespodologia.cl`
-no existe como buzón: si un paciente responde el correo, rebota. Los filtros de
-spam también penalizan que un dominio remitente no pueda recibir respuestas.
+Con el DNS ya correcto los correos seguían cayendo en no deseados. El diagnóstico
+real se sacó enviando un correo idéntico al de producción a mail-tester.com:
 
-Opción sin costo: crear un **reenvío** con ImprovMX (u otro servicio de forwarding)
-para que todo lo que llegue a `contacto@vidadecolorespodologia.cl` se reenvíe al
-Gmail de la clínica, y agregar en Vercel los MX que indique el servicio.
+**Puntaje: 5.6/10** — a un pelo del umbral de spam. Lo que restaba:
 
-Mientras tanto, el código ya envía la cabecera **Reply-To** apuntando al correo de
-la clínica (⚙️ Configuración → Datos del negocio), así las respuestas llegan igual.
+| Regla de SpamAssassin | Puntos | Qué es |
+|---|---|---|
+| `FREEMAIL_FORGED_REPLYTO` | **2.5** | Reply-To en `@gmail.com` con el From en el dominio propio |
+| `HTML_IMAGE_ONLY_24` | 1.3 | poco texto en relación al HTML + el píxel de seguimiento de Brevo |
+| imágenes sin `alt` | 0.5 | el píxel de apertura que agrega Brevo |
+| `HEADER_FROM_DIFFERENT_DOMAINS` | 0.25 | el sobre sale de Brevo, el From es del dominio |
 
-### 5.3 Lo que ya está bien (verificado)
+La regla cara la introdujo, sin querer, el arreglo anterior: un **Reply-To hacia una
+casilla `@gmail.com` cuando el remitente es un dominio propio es el patrón clásico de
+suplantación**, y pesa 2.5 puntos. Ya no hace falta ese Reply-To, porque desde que
+existen los MX el dominio recibe correo: contestar al remitente llega igual.
 
-| Registro | Estado |
-|----------|--------|
-| DKIM `brevo1._domainkey` / `brevo2._domainkey` | ✅ |
-| DMARC `_dmarc` (`p=none`) | ✅ |
-| `brevo-code` en la raíz | ✅ |
-| CNAME de marca `mail`, `img.mail`, `r.mail` | ✅ |
+**Se quitó el Reply-To de los dos correos** (`lib/email.ts`) → **8.1/10** medido.
 
-### 5.4 Mejoras aplicadas en el código
+Autenticación, ya verificada en el informe: SPF `pass`, DKIM `pass` firmado por
+`d=vidadecolorespodologia.cl`, DMARC `pass`, IP no está en ninguna lista negra.
 
-- Cada correo se envía con **versión en texto plano** además del HTML
-  (los mensajes solo-HTML suman puntos de spam).
-- Se agrega **Reply-To** con el correo real de la clínica.
-- Se quitaron los **emojis del inicio del asunto** (`✅`, `📅`), que es donde más
-  pesan para los filtros. Dentro del cuerpo se mantienen.
+### 5.3 Lo que queda (y no vale la pena forzar)
 
-### 5.5 Cuando ya lleguen bien
+- **Píxel de seguimiento de Brevo** (1.3 + 0.5 pts): Brevo **no permite** desactivar
+  el seguimiento de aperturas en correos transaccionales, ni por API ni por cuenta.
+  Se puede compensar escribiendo más texto en el cuerpo del correo.
+- **`HEADER_FROM_DIFFERENT_DOMAINS`** (0.25): requiere un return-path propio, que es
+  de plan pago en Brevo. Es un cuarto de punto: no se toca.
+
+### 5.4 Reputación: no enviar a correos falsos
+
+El panel guarda `rut@sincorreo.local` cuando el paciente no da correo. Enviar a esa
+dirección generaba rebotes (`Unable to find MX of domain sincorreo.local`) y los
+rebotes bajan la reputación del remitente. `emailValido()` ahora la descarta.
+
+### 5.5 Cómo volver a diagnosticar esto
+
+1. Ir a mail-tester.com y copiar la dirección `test-xxxx@srv1.mail-tester.com`
+2. Enviar ahí un correo igual al de producción (misma API, mismo remitente, misma plantilla)
+3. Abrir `https://www.mail-tester.com/test-xxxx` y leer el desglose
+
+Para ver el estado de entrega real: Brevo → Statistics → Email, o la API
+`GET /v3/smtp/statistics/events?days=15`.
+
+### 5.6 Cuando lleven un tiempo llegando bien
 
 Subir el DMARC de `p=none` a `p=quarantine` refuerza la reputación del dominio.
 Hacerlo **solo después** de confirmar por una o dos semanas que todo entra a la
